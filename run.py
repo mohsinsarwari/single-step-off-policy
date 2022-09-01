@@ -27,7 +27,7 @@ parser.add_argument('--lr', type=float, default=0.05)
 
 args  = parser.parse_args()
 horizon = args.horizon
-traj_length = args.trajs
+num_trajs = args.trajs
 env_name = args.env
 seed = args.seed
 epochs = args.epochs
@@ -37,7 +37,7 @@ loops = args.loops
 # Setup problem parameters
 f_nominal = None
 cost = None
-make_controller = None
+controller = None
 if env_name == "car": # TODO: Check if this is correct
     f_nominal = lambda x, u: np.array([x[0] + x[2] * np.cos(x[3]) * u[0],
                                        x[1] + x[2] * np.sin(x[3]) * u[0],
@@ -45,30 +45,33 @@ if env_name == "car": # TODO: Check if this is correct
                                        x[3] + u[0]])
     cost = lambda x, u, t: 0.1 * u[0] ** 2 + 0.1 * u[1] ** 2 + 0.1 * (x[2] - 1) ** 2
 
-    def make_controller(spline):
-        def controller(x):
-            return 0 # TODO: implement
-        return controller
+    def controller(x, t, spline):
+        return 0 # TODO: implement
+
+    def sample_task():
+        return np.random.uniform(0.5, 1.5, 1) # TODO: Fix this
 else:
     raise NotImplementedError("Environment not implemented")
 
 # Collect trajectories function
-def collect_trajs(spline):
+def collect_trajs(model):
     env = gym.make(env_name)
     env.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    controller = make_controller(spline)
-
     trajs = []
     x0s = []
-    for i in range(traj_length):
+    tasks = []
+    for i in range(num_trajs):
+        task = sample_task()
+        tasks.append(task)
+        spline = model(task)
         traj = []
         obs = env.reset()
         x0s.append(obs)
         for j in range(horizon):
-            action = controller(obs)
+            action = controller(obs, j, spline)
             next_obs, reward, done, info = env.step(action)
             traj.append((obs, action, reward, next_obs, done))
             obs = next_obs
@@ -80,27 +83,26 @@ def collect_trajs(spline):
         dyn_tuples = []
         for obs, action, reward, next_obs, done in traj:
             dyn_tuples.append((obs, action, next_obs))
-        def f(x, u, t):
-            return dyn_tuples[t][2] + f_nominal(dyn_tuples[t][0], dyn_tuples[t][1]) - x - u # TODO: fix
-        fs.append(f)
-    return fs, x0s
+        fs.append(dyn_tuples)
+    return fs, x0s, tasks
 
 # Setup NN
-model = nn.Linear(1, 1) # TODO: Setup right model
+model = nn.Linear(10, 10) # TODO: Setup right model
 
 # Train NN
 for loop in range(loops):
     # Collect trajectories
-    dynamics, x0s = collect_trajs(model)
-    controller = make_controller(model)
+    dynamics, x0s, tasks = collect_trajs(model)
 
     # Construct loss function
-    loss_fn = 0
-    for (f, x0) in zip(dynamics, x0s):
+    loss = 0
+    for (dyn, x0, task) in zip(dynamics, x0s, tasks):
         x = x0
+        f = lambda x,u,t: f_nominal(x,u) + dyn[t][2] - f_nominal(dyn[t][0], dyn[t][1])
+        spline = model(task)
         for t in range(horizon):
-            u = controller(x)
-            loss_fn += cost(x, u, t)
+            u = controller(x, t, spline)
+            loss += cost(x, u, t, task)
             x = f(x, u, t)
 
     # Backprop
@@ -109,7 +111,7 @@ for loop in range(loops):
     # Run training
     for epoch in range(epochs):
         optimizer.zero_grad()
-        predictions = model(x)
-        loss = loss_fn(predictions, t)
         loss.backward()
         optimizer.step()
+
+# Test NN
