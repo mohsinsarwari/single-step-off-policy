@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import gym
-
+from helper import *
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -43,7 +43,7 @@ if env_name == "car": # TODO: Check if this is correct
                                        x[1] + x[2] * np.sin(x[3]) * u[0],
                                        x[2] + u[1],
                                        x[3] + u[0]])
-    cost = lambda x, u, t: 0.1 * u[0] ** 2 + 0.1 * u[1] ** 2 + 0.1 * (x[2] - 1) ** 2
+    cost = lambda x, u, t, spline: 0.1 * u[0] ** 2 + 0.1 * u[1] ** 2 + 0.1 * (x[2] - 1) ** 2
 
     def controller(x, t, spline):
         return 0 # TODO: implement
@@ -87,9 +87,9 @@ def collect_trajs(model):
     return fs, x0s, tasks
 
 # Setup NN
-model = nn.Linear(10, 10) # TODO: Setup right model
+model = make_model([1, 32, 32, 4]) # TODO: Setup write layer sizes
 
-# Train NN
+# Training Loop
 for loop in range(loops):
     # Collect trajectories
     dynamics, x0s, tasks = collect_trajs(model)
@@ -107,8 +107,6 @@ for loop in range(loops):
 
     # Backprop
     optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    # Run training
     for epoch in range(epochs):
         optimizer.zero_grad()
         loss.backward()
