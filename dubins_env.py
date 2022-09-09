@@ -3,6 +3,7 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 from os import path
+import torch
 
 
 class Dubins_env(gym.Env):
@@ -18,7 +19,7 @@ class Dubins_env(gym.Env):
         max_input = np.array([10, 10])
         self.action_space = spaces.Box(low=-max_input, high=max_input, shape=(2,), dtype=np.float32)
         self.observation_space = spaces.Box(low=-max_state, high=max_state, shape=(4,), dtype=np.float32)
-        self.state = np.array([0, 0, 0, 0])
+        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
         
         self.num_steps = total_time // dt
         self.total_time = total_time
@@ -33,8 +34,8 @@ class Dubins_env(gym.Env):
         x, y, v, phi = self.state
         a, theta = action
 
-        x_dot = v*np.cos(phi)
-        y_dot = v*np.sin(phi)
+        x_dot = v*torch.cos(phi)
+        y_dot = v*torch.sin(phi)
         v_dot = a
         phi_dot = theta
 
@@ -44,7 +45,7 @@ class Dubins_env(gym.Env):
         phi_new = phi + phi_dot*self.dt
 
 
-        self.state = np.array([x_new, y_new, v_new, phi_new])
+        self.state = torch.tensor([x_new, y_new, v_new, phi_new], dtype=torch.float)
 
         costs = 0
 
@@ -60,7 +61,7 @@ class Dubins_env(gym.Env):
 
     def reset(self):
 
-        self.state = np.array([0, 0, 0, 0])
+        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
         self.curr_step = 0
         self.done = False
 

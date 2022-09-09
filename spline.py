@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
+import pdb
 
 class Spline():
     
@@ -21,10 +22,12 @@ class Spline():
         row_length = 4 * (n-1)
 
         self.A_x = []
-        self.b_x = []
-
         self.A_y = []
-        self.b_y = []
+
+        self.b_x = torch.zeros(4*(n-1), dtype=torch.double)
+        self.b_y = torch.zeros(4*(n-1), dtype=torch.double)
+
+        j=0 #index for b vectors
 
         for i in np.arange(0, n):
             t = times[i]
@@ -42,7 +45,6 @@ class Spline():
                 f_x[4*(i-1) + 2] = t
                 f_x[4*(i-1) + 3] = 1
                 self.A_x.append(f_x)
-                self.b_x.append(x)
 
                 f_x_prime[4*(i-1)] = 3*t**2
                 f_x_prime[4*(i-1) + 1] = 2*t
@@ -54,11 +56,16 @@ class Spline():
                 f_y[4*(i-1) + 2] = t
                 f_y[4*(i-1) + 3] = 1
                 self.A_y.append(f_y)
-                self.b_y.append(y)
 
                 f_y_prime[4*(i-1)] = 3*t**2
                 f_y_prime[4*(i-1) + 1] = 2*t
                 f_y_prime[4*(i-1) + 2] = 1
+            else:
+                self.b_x[j] = x
+                self.b_x[j+1] = 0
+                self.b_y[j] = y
+                self.b_y[j+1] = 0
+                j += 2
 
             if i != n-1:
                 f_x = np.zeros(row_length)
@@ -67,8 +74,6 @@ class Spline():
                 f_x[4*i + 2] = t
                 f_x[4*i + 3] = 1
                 self.A_x.append(f_x)
-                self.b_x.append(x)
-
 
                 f_x_prime[4*i] = -3*t**2
                 f_x_prime[4*i + 1] = -2*t
@@ -80,18 +85,19 @@ class Spline():
                 f_y[4*i + 2] = t
                 f_y[4*i + 3] = 1
                 self.A_y.append(f_y)
-                self.b_y.append(y)
-
 
                 f_y_prime[4*i] = -3*t**2
                 f_y_prime[4*i + 1] = -2*t
                 f_y_prime[4*i + 2] = -1
+            else:
+                self.b_x[j] = x
+                self.b_x[j+1] = 0
+                self.b_y[j] = y
+                self.b_y[j+1] = 0
+                j += 2
 
             self.A_x.append(f_x_prime)
-            self.b_x.append(0)
-
             self.A_y.append(f_y_prime)
-            self.b_y.append(0)
 
             if i != 0 and i != n-1:
 
@@ -104,7 +110,6 @@ class Spline():
                 f_x_dprime[4*i + 1] = -2
 
                 self.A_x.append(f_x_dprime)
-                self.b_x.append(0)
 
                 f_y_dprime = np.zeros(row_length)
                 f_y_dprime[4*(i-1)] = 6*t
@@ -114,12 +119,19 @@ class Spline():
                 f_y_dprime[4*i + 1] = -2
 
                 self.A_y.append(f_y_dprime)
-                self.b_y.append(0)
+
+                self.b_x[j] = x
+                self.b_x[j+1] = x
+                self.b_x[j+2] = 0
+                self.b_x[j+3] = 0
+                self.b_y[j] = y
+                self.b_y[j+1] = y
+                self.b_y[j+2] = 0
+                self.b_y[j+3] = 0
+                j += 4
 
         self.A_x = torch.from_numpy(np.array(self.A_x))
         self.A_y = torch.from_numpy(np.array(self.A_y))
-        self.b_x = torch.tensor(self.b_x, dtype=torch.float64)
-        self.b_y = torch.tensor(self.b_y, dtype=torch.float64)
 
 
     def evaluate(self, t, der=0):

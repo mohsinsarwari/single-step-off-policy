@@ -49,10 +49,10 @@ f_nominal = None
 cost = None
 controller = None
 if env_name == "car":
-    f_nominal = lambda x, u: np.array([x[0] + x[2] * np.cos(x[3]) * dt,
-                                       x[1] + x[2] * np.sin(x[3]) * dt,
+    f_nominal = lambda x, u: torch.tensor([x[0] + x[2] * torch.cos(x[3]) * dt,
+                                       x[1] + x[2] * torch.sin(x[3]) * dt,
                                        x[2] + u[0] * dt,
-                                       x[3] + u[1] * dt])
+                                       x[3] + u[1] * dt], dtype=torch.float)
 
     def cost(x, u, t, spline_params):
 
@@ -62,7 +62,7 @@ if env_name == "car":
         return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (input_weight * (u[0]**2 + u[1]**2))
 
     def sample_task():
-        return torch.tensor([0, 1, 2, 1, 0, 0, 1, 0, -1, 0], dtype=torch.float, requires_grad=True)
+        return [0, 1, 2, 1, 0, 0, 1, 0, -1, 0] #torch.tensor([0, 1, 2, 1, 0, 0, 1, 0, -1, 0], dtype=torch.float)
 
     controller = Dubins_controller(k_x=12, k_y=12, k_v=12, k_phi=12)
     env = Dubins_env(total_time=total_time, dt=dt)
@@ -82,7 +82,7 @@ def collect_trajs(model):
     for i in range(num_trajs):
         task = sample_task()
         tasks.append(task)
-        spline_params = model(task)
+        spline_params = model(torch.tensor(task, dtype=torch.float, requires_grad=False))
         spline = Spline(times, spline_params[:total_time+1], spline_params[total_time+1:])
         traj = []
         obs = env.reset()
@@ -101,6 +101,7 @@ def collect_trajs(model):
         for obs, action, reward, next_obs, done in traj:
             dyn_tuples.append((obs, action, next_obs))
         fs.append(dyn_tuples)
+
     return fs, x0s, tasks
 
 # Setup NN
@@ -116,19 +117,19 @@ for loop in range(loops):
     for (dyn, x0, task) in zip(dynamics, x0s, tasks):
         x = x0
         f = lambda x,u,t: f_nominal(x,u) + dyn[t][2] - f_nominal(dyn[t][0], dyn[t][1])
-        spline_params = model(task)
+        spline_params = model(torch.tensor(task, dtype=torch.float))
         spline = Spline(times, spline_params[:total_time+1], spline_params[total_time+1:])
         for t in np.arange(0, total_time, dt):
             u, _, _ = controller.next_action(t, spline, x)
             loss += cost(x, u, t, task)
             x = f(x, u, int(t//dt))
 
+
     # Backprop
     optimizer = optim.Adam(model.parameters(), lr=lr)
     for epoch in range(epochs):
         optimizer.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=True)
         optimizer.step()
-        print(loss)
 
 # Test NN

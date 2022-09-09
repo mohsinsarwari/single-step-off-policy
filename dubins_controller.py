@@ -7,7 +7,8 @@ from dubins_env import Dubins_env
 from spline import Spline
 import matplotlib
 import matplotlib.pyplot as plt
-
+import torch
+import pdb
 
 class Dubins_controller:
     """
@@ -51,9 +52,9 @@ class Dubins_controller:
         x_tilde_dot_d = x_dot_d + self.k_x*(x_d - x_act)
         y_tilde_dot_d = y_dot_d + self.k_y*(y_d - y_act)
 
-        v_des = np.sqrt(x_tilde_dot_d**2 + y_tilde_dot_d**2)
+        v_des = torch.sqrt(x_tilde_dot_d**2 + y_tilde_dot_d**2)
 
-        phi_des = np.arctan(y_tilde_dot_d/x_tilde_dot_d)
+        phi_des = torch.arctan(y_tilde_dot_d/x_tilde_dot_d)
 
         #change to measure from positive x-axis in the range of 0 to 2pi
         if x_tilde_dot_d < 0:
@@ -62,13 +63,13 @@ class Dubins_controller:
             phi_des += 2*np.pi
 
 
-        if np.abs(phi_des - phi_act) > np.abs(phi_des - 2*np.pi - phi_act):
+        if torch.abs(phi_des - phi_act) > torch.abs(phi_des - 2*np.pi - phi_act):
             phi_des -= 2*np.pi
             
         a = self.k_v*(v_des - v_act)
         theta = self.k_phi*(phi_des - phi_act)
 
-        action = np.array([a, theta])
+        action = [a, theta]
 
         return action, [x_d, y_d], [x_act, y_act]
 
