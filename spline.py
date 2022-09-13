@@ -10,11 +10,11 @@ import pdb
 
 class Spline():
     
-    def __init__(self, times, x_coord, y_coord):
+    def __init__(self, times, x_coord, y_coord, x0=0, y0=0):
 
         n = len(times)
-        assert n == len(x_coord), "lengths don't match"
-        assert n == len(y_coord), "lengths don't match"
+        assert n == len(x_coord) + 1, "lengths don't match"
+        assert n == len(y_coord) + 1, "lengths don't match"
         assert n >= 2, "not long enough"
 
         self.times = times
@@ -29,10 +29,14 @@ class Spline():
 
         j=0 #index for b vectors
 
-        for i in np.arange(0, n):
+        for i in np.arange(n):
             t = times[i]
-            x = x_coord[i]
-            y = y_coord[i]
+            if i == 0:
+                x = x0
+                y = y0
+            else: 
+                x = x_coord[i-1]
+                y = y_coord[i-1]
 
             f_x_prime = np.zeros(row_length)
             f_y_prime = np.zeros(row_length)
@@ -136,8 +140,6 @@ class Spline():
         self.coeffs_x = torch.matmul(self.A_x, self.b_x)
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)
 
-        # self.x_coord = x_coord
-        # self.y_coord = y_coord
 
     def evaluate(self, t, der=0):
 
@@ -171,9 +173,8 @@ class Spline():
 
 
 if __name__=="__main__":
-    cs = Spline(np.arange(9), [0, 1, 2, 1, 0, -1, -2, -1, 0], [0, 1, 0, -1, 0, 1, 0, -1, 0])
-
-    times = np.linspace(0, 8, 80)
+    cs = Spline(np.arange(3), [1, 2], [1, 0])
+    times = np.linspace(0, 2, 80)
 
     xs = []
     ys = []

@@ -20,7 +20,6 @@ class Dubins_env(gym.Env):
         max_input = np.array([10, 10])
         self.action_space = spaces.Box(low=-max_input, high=max_input, shape=(2,), dtype=np.float32)
         self.observation_space = spaces.Box(low=-max_state, high=max_state, shape=(4,), dtype=np.float32)
-        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
         
         self.num_steps = total_time // dt
         self.total_time = total_time
@@ -32,10 +31,11 @@ class Dubins_env(gym.Env):
         self.np_random,seed=seeding.np_random(seed)
 
     def step(self, action):
-        x = self.state[0]
-        y = self.state[1]
-        v = self.state[2]
-        phi = self.state[3]
+        state_copy = self.state.clone()
+        x = state_copy[0]
+        y = state_copy[1]
+        v = state_copy[2]
+        phi = state_copy[3]
         a = action[0]#.clone()
         theta = action[1]#.clone()
 
@@ -51,7 +51,7 @@ class Dubins_env(gym.Env):
         # v_new = v + v_dot*self.dt
         # phi_new = phi + phi_dot*self.dt
 
-        self.state = self.state + dot*self.dt
+        self.state = state_copy + dot*self.dt
 
         costs = 0
 
@@ -67,7 +67,8 @@ class Dubins_env(gym.Env):
 
     def reset(self):
 
-        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
+        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)#, requires_grad=True)
+        #self.state.retain_grad()
         self.curr_step = 0
         self.done = False
 

@@ -80,10 +80,10 @@ class Dubins_controller:
 if __name__=="__main__":
     total_time = 4
     env = Dubins_env(total_time=total_time)
-    controller = Dubins_controller(10, 10, 10, 10)
+    controller = Dubins_controller(5, 5, 5, 5)
     times = np.arange(total_time+1)
-    params = [0, 1, 2, 1, 0, 0, 1, 0, -1, 0]
-    cs = Spline(times, params[:total_time+1], params[total_time+1:])
+    params = [1, 2, 1, 0, 1, 0, -1, 0]
+    cs = Spline(times, params[:total_time], params[total_time:])
 
     obs = env.reset()
     done = False
