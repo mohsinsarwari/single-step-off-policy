@@ -4,6 +4,7 @@ from gym.utils import seeding
 import numpy as np
 from os import path
 import torch
+import pdb
 
 
 class Dubins_env(gym.Env):
@@ -31,21 +32,26 @@ class Dubins_env(gym.Env):
         self.np_random,seed=seeding.np_random(seed)
 
     def step(self, action):
-        x, y, v, phi = self.state
-        a, theta = action
+        x = self.state[0].clone()
+        y = self.state[1].clone()
+        v = self.state[2].clone()
+        phi = self.state[3].clone()
+        a = action[0]#.clone()
+        theta = action[1]#.clone()
 
-        x_dot = v*torch.cos(phi)
-        y_dot = v*torch.sin(phi)
-        v_dot = a
-        phi_dot = theta
+        dot = torch.zeros(4)
 
-        x_new = x + x_dot*self.dt
-        y_new = y + y_dot*self.dt
-        v_new = v + v_dot*self.dt
-        phi_new = phi + phi_dot*self.dt
+        dot[0] = v*torch.cos(phi)
+        dot[1] = v*torch.sin(phi)
+        dot[2] = a
+        dot[3] = theta
 
+        # x_new = x + x_dot*self.dt
+        # y_new = y + y_dot*self.dt
+        # v_new = v + v_dot*self.dt
+        # phi_new = phi + phi_dot*self.dt
 
-        self.state = torch.tensor([x_new, y_new, v_new, phi_new], dtype=torch.float)
+        self.state = self.state.clone() + dot*self.dt
 
         costs = 0
 

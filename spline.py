@@ -130,28 +130,28 @@ class Spline():
                 self.b_y[j+3] = 0
                 j += 4
 
-        self.A_x = torch.from_numpy(np.array(self.A_x))
-        self.A_y = torch.from_numpy(np.array(self.A_y))
+        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x))
+        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y))
 
+        self.coeffs_x = torch.matmul(self.A_x, self.b_x)
+        self.coeffs_y = torch.matmul(self.A_y, self.b_y)
 
     def evaluate(self, t, der=0):
-        coeffs_x = torch.matmul(torch.inverse(self.A_x), self.b_x)
-        coeffs_y = torch.matmul(torch.inverse(self.A_y), self.b_y)
 
         i = 0
 
         while self.times[i+1] < t:
             i += 1
 
-        a_x = coeffs_x[4*i]
-        b_x = coeffs_x[4*i + 1]
-        c_x = coeffs_x[4*i + 2]
-        d_x = coeffs_x[4*i + 3]
+        a_x = self.coeffs_x[4*i]
+        b_x = self.coeffs_x[4*i + 1]
+        c_x = self.coeffs_x[4*i + 2]
+        d_x = self.coeffs_x[4*i + 3]
 
-        a_y = coeffs_y[4*i]
-        b_y = coeffs_y[4*i + 1]
-        c_y = coeffs_y[4*i + 2]
-        d_y = coeffs_y[4*i + 3]
+        a_y = self.coeffs_y[4*i]
+        b_y = self.coeffs_y[4*i + 1]
+        c_y = self.coeffs_y[4*i + 2]
+        d_y = self.coeffs_y[4*i + 3]
 
         if der==0:
             res_x = a_x*t**3 + b_x*t**2 + c_x*t + d_x

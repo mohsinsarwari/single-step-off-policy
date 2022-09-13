@@ -52,9 +52,13 @@ class Dubins_controller:
         x_tilde_dot_d = x_dot_d + self.k_x*(x_d - x_act)
         y_tilde_dot_d = y_dot_d + self.k_y*(y_d - y_act)
 
-        v_des = torch.sqrt(x_tilde_dot_d**2 + y_tilde_dot_d**2)
+        v_des = torch.sqrt(x_tilde_dot_d**2 + y_tilde_dot_d**2 + 1e-8) #small add needed to make sure backward pass works
+        #https://discuss.pytorch.org/t/runtimeerror-function-sqrtbackward-returned-nan-values-in-its-0th-output/48702
 
-        phi_des = torch.arctan(y_tilde_dot_d/x_tilde_dot_d)
+        if x_tilde_dot_d == 0:
+            phi_des = torch.sign(y_tilde_dot_d)*np.pi/2
+        else:
+            phi_des = torch.arctan(y_tilde_dot_d/x_tilde_dot_d)
 
         #change to measure from positive x-axis in the range of 0 to 2pi
         if x_tilde_dot_d < 0:

@@ -105,6 +105,7 @@ def collect_trajs(model):
     return fs, x0s, tasks
 
 # Setup NN
+torch.autograd.set_detect_anomaly(True)
 model = make_model([2*len(times), 32, 32, 2*len(times)])
 
 # Training Loop
@@ -122,8 +123,7 @@ for loop in range(loops):
         for t in np.arange(0, total_time, dt):
             u, _, _ = controller.next_action(t, spline, x)
             loss += cost(x, u, t, task)
-            x = f(x, u, int(t//dt))
-
+            x = f(x.clone(), u, int(t//dt))
 
     # Backprop
     optimizer = optim.Adam(model.parameters(), lr=lr)
