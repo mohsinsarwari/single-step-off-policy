@@ -32,10 +32,10 @@ class Dubins_env(gym.Env):
         self.np_random,seed=seeding.np_random(seed)
 
     def step(self, action):
-        x = self.state[0].clone()
-        y = self.state[1].clone()
-        v = self.state[2].clone()
-        phi = self.state[3].clone()
+        x = self.state[0]
+        y = self.state[1]
+        v = self.state[2]
+        phi = self.state[3]
         a = action[0]#.clone()
         theta = action[1]#.clone()
 
@@ -51,7 +51,7 @@ class Dubins_env(gym.Env):
         # v_new = v + v_dot*self.dt
         # phi_new = phi + phi_dot*self.dt
 
-        self.state = self.state.clone() + dot*self.dt
+        self.state = self.state + dot*self.dt
 
         costs = 0
 

@@ -136,6 +136,9 @@ class Spline():
         self.coeffs_x = torch.matmul(self.A_x, self.b_x)
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)
 
+        # self.x_coord = x_coord
+        # self.y_coord = y_coord
+
     def evaluate(self, t, der=0):
 
         i = 0
@@ -159,6 +162,9 @@ class Spline():
         elif der==1:
             res_x = 3*a_x*t**2 + 2*b_x*t + c_x
             res_y = 3*a_y*t**2 + 2*b_y*t + c_y
+
+        # res_x = self.x_coord[i]
+        # res_y = self.y_coord[i]
 
         return res_x, res_y
 

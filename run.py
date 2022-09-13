@@ -14,12 +14,12 @@ parser.add_argument('--env', type=str, default="car")
 parser.add_argument('--horizon', type=int, default=4)
 parser.add_argument('--trajs', '-t', type=int, default=1)
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--loops', type=int, default=1)
+parser.add_argument('--loops', type=int, default=100)
 parser.add_argument('--epochs', '-e', type=int, default=10)
-parser.add_argument('--lr', type=float, default=0.05)
+parser.add_argument('--lr', type=float, default=0.5)
 parser.add_argument('--total_time', type=float, default=4)
 parser.add_argument('--dt', type=float, default=0.01)
-parser.add_argument('--input_weight', type=float, default=0.5)
+parser.add_argument('--input_weight', type=float, default=0)
 
 ## Example arg parsers arguments
 # parser.add_argument('--epochs_reward', type=int, default=3)
@@ -72,35 +72,36 @@ else:
 
 # Collect trajectories function
 def collect_trajs(model):
-    env.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
-    trajs = []
-    x0s = []
-    tasks = []
-    for i in range(num_trajs):
-        task = sample_task()
-        tasks.append(task)
-        spline_params = model(torch.tensor(task, dtype=torch.float, requires_grad=False))
-        spline = Spline(times, spline_params[:total_time+1], spline_params[total_time+1:])
-        traj = []
-        obs = env.reset()
-        x0s.append(obs)
-        for j in np.arange(0, total_time, dt):
-            action, _, _ = controller.next_action(j, spline, obs)
-            next_obs, reward, done, info = env.step(action)
-            traj.append((obs, action, reward, next_obs, done))
-            obs = next_obs
-        trajs.append(traj)
+    with torch.no_grad():
+        # env.seed(seed)
+        # np.random.seed(seed)
+        # torch.manual_seed(seed)
+        trajs = []
+        x0s = []
+        tasks = []
+        for i in range(num_trajs):
+            task = sample_task()
+            tasks.append(task)
+            spline_params = model(torch.tensor(task, dtype=torch.float))
+            spline = Spline(times, spline_params[:total_time+1], spline_params[total_time+1:])
+            traj = []
+            obs = env.reset()
+            x0s.append(obs)
+            for j in np.arange(0, total_time, dt):
+                action, _, _ = controller.next_action(j, spline, obs)
+                next_obs, reward, done, info = env.step(action)
+                traj.append((obs, action, reward, next_obs, done))
+                obs = next_obs
+            trajs.append(traj)
 
-    # Make time-varying dynamics
-    fs = []
-    for traj in trajs:
-        dyn_tuples = []
-        for obs, action, reward, next_obs, done in traj:
-            dyn_tuples.append((obs, action, next_obs))
-        fs.append(dyn_tuples)
+        # Make time-varying dynamics
+        fs = []
+        for traj in trajs:
+            dyn_tuples = []
+            for obs, action, reward, next_obs, done in traj:
+                dyn_tuples.append((obs, action, next_obs))
+            fs.append(dyn_tuples)
 
     return fs, x0s, tasks
 
@@ -109,7 +110,12 @@ torch.autograd.set_detect_anomaly(True)
 model = make_model([2*len(times), 32, 32, 2*len(times)])
 
 # Training Loop
+
+optimizer = optim.Adam(model.parameters(), lr=lr)
 for loop in range(loops):
+    last = np.array([x.detach().numpy() for x in model.parameters()])
+    optimizer.zero_grad() 
+
     # Collect trajectories
     dynamics, x0s, tasks = collect_trajs(model)
 
@@ -119,17 +125,48 @@ for loop in range(loops):
         x = x0
         f = lambda x,u,t: f_nominal(x,u) + dyn[t][2] - f_nominal(dyn[t][0], dyn[t][1])
         spline_params = model(torch.tensor(task, dtype=torch.float))
+
+
+        des_x = []
+        des_y = []
+        act_x = []
+        act_y = []
+        tar_x = []
+        tar_y = []
+
         spline = Spline(times, spline_params[:total_time+1], spline_params[total_time+1:])
         for t in np.arange(0, total_time, dt):
-            u, _, _ = controller.next_action(t, spline, x)
+            u, des_pos, act_pos= controller.next_action(t, spline, x)
+
+            target = Spline(times, task[:total_time+1], task[total_time+1:])
+            tar_pos_x, tar_pos_y = target.evaluate(t, der=0)
+
             loss += cost(x, u, t, task)
-            x = f(x.clone(), u, int(t//dt))
+            x = f(x, u, int(t//dt))
+
+            des_x.append(des_pos[0].detach())
+            des_y.append(des_pos[1].detach())
+            act_x.append(act_pos[0])
+            act_y.append(act_pos[1])
+            tar_x.append(tar_pos_x)
+            tar_y.append(tar_pos_y)
+
+        # plt.plot(des_x, des_y, label="desired")
+        # plt.plot(act_x, act_y, label="actual")
+        # plt.plot(tar_x, tar_y, label="target")
+        # plt.legend()
+        # plt.show()
 
     # Backprop
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        loss.backward(retain_graph=True)
-        optimizer.step()
+    # for epoch in range(epochs): 
+    pdb.set_trace() 
+    loss.retain_grad() 
+    loss.backward()
+    with torch.no_grad():
+      for p in model.parameters():
+        new_val = p - p.grad*lr
+        p.copy_(new_val)
+    print("Loss: ", loss)
+    #print("Params Diff: ", np.linalg.norm(np.array([x.detach().numpy() for x in model.parameters()]) - last))
 
 # Test NN
