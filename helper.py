@@ -17,7 +17,7 @@ def sample_task():
 	task = torch.tensor([1, 2, 3, 1, 2, 3], dtype=torch.float)
 	return task, 0, 0
 
-def generate_traj(horizon=5, noise=0.1, dev=torch.device("cpu")):
+def generate_traj(horizon=5, noise=0.6, dev=torch.device("cpu")):
 	xs = []
 	ys = []
 	dt = 0.1

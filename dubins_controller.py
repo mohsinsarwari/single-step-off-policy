@@ -80,7 +80,7 @@ class Dubins_controller:
 
 if __name__=="__main__":
     horizon = 3
-    env = Dubins_env(total_time=horizon)
+    env = Dubins_env(total_time=horizon, f_v=0.5, f_phi=0.25)
     controller = Dubins_controller(3, 3, 3, 3)
     params = generate_traj(horizon)
 

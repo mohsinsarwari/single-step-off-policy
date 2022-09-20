@@ -22,7 +22,7 @@ log = True
 LOG_PATH = "./logs"
 BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
 
-RUN_NAME = "full_car_test"
+RUN_NAME = "full_car_test2"
 
 logdir = os.path.join(LOG_PATH, RUN_NAME)
 
@@ -33,8 +33,8 @@ if log:
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default="car")
 parser.add_argument('--horizon', type=int, default=3)
-parser.add_argument('--trajs', '-t', type=int, default=10)
-parser.add_argument('--iterations', type=int, default=1000)
+parser.add_argument('--trajs', '-t', type=int, default=30)
+parser.add_argument('--iterations', type=int, default=300)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
@@ -44,7 +44,7 @@ args  = parser.parse_args()
 
 params = vars(args)
 
-params["model_scale"] = 5
+params["model_scale"] = 3
 
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-------Using {} ----------".format(dev))
@@ -100,7 +100,7 @@ else:
 # Setup NN
 # Input: [x0, x1, ..., y0, y1, ..., xd_f, yd_f]
 # Output: Deltas on the above
-model = make_model([2*params["horizon"]+2, 20, 20, 2*params["horizon"]+2])
+model = make_model([2*params["horizon"]+2, 32, 32, 2*params["horizon"]+2])
 model.to(dev)
 
 # Collect trajectories function
@@ -160,7 +160,9 @@ for i in prog_bar:#tqdm(range(params["iterations"])):
         for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)
 
-            loss += cost(x, u, t, task)
+            if t % (3*params["dt"]) == 0:
+                loss += cost(x, u, t, task)
+
             x = f(x, u, int(t/params["dt"]))
 
     prog_bar.set_description("Loss: {}".format(loss), refresh=True)

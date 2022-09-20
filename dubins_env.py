@@ -14,7 +14,7 @@ class Dubins_env(gym.Env):
     """
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, total_time = 10, dt= 0.01, dev=torch.device("cpu")):
+    def __init__(self, total_time=10, dt=0.01, f_v=0.1, f_phi=0.05, dev=torch.device("cpu")):
 
         max_state = np.array([100, 100, 100, 100])
         max_input = np.array([10, 10])
@@ -26,6 +26,9 @@ class Dubins_env(gym.Env):
         self.dt = dt
         self.curr_step = 0
         self.done = False
+        self.f_v = f_v
+        self.f_phi = f_phi
+        self.n = 0.95
         self.dev=dev
 
     def seed(self,seed=None):
@@ -44,8 +47,8 @@ class Dubins_env(gym.Env):
 
         dot[0] = v*torch.cos(phi)
         dot[1] = v*torch.sin(phi)
-        dot[2] = a
-        dot[3] = theta
+        dot[2] = -self.f_v*v + self.n*a
+        dot[3] = -self.f_phi*phi + self.n*theta
 
         # x_new = x + x_dot*self.dt
         # y_new = y + y_dot*self.dt
