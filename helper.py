@@ -14,10 +14,8 @@ def make_model(layer_sizes):
 	return nn.Sequential(*layers)
 
 def sample_task():
-	task = torch.tensor([0, 1, 2, 1, 0, -1, -2, -1, 0, 0, 1, 0, -1, 0, 1, 0, -1, 0], dtype=torch.float)
-	total_time = len(task) // 2
-	times = np.arange(total_time+1)
-	return task
+	task = torch.tensor([1, 2, 3, 1, 2, 3], dtype=torch.float)
+	return task, 0, 0
 
 def generate_traj(horizon=5, noise=0.5):
 	xs = []
@@ -58,9 +56,9 @@ def generate_traj(horizon=5, noise=0.5):
 
 if __name__ == "__main__":
 
-	horizon = 10
+	horizon = 5
 
-	for i in range(40):
+	for i in range(1):
 
 		task, xd_f, yd_f = generate_traj(horizon)
 

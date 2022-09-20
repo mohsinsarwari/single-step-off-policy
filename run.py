@@ -17,7 +17,7 @@ from tqdm import tqdm, trange
 import json
 from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
-log = False
+log = True
 
 LOG_PATH = "./logs"
 BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
@@ -26,15 +26,18 @@ RUN_NAME = "car_test1"
 
 logdir = os.path.join(LOG_PATH, RUN_NAME)
 
+if log:
+    os.mkdir(logdir)
+
 #tensorboard
 if log:
     writer = SummaryWriter(log_dir=os.path.join(BOARD_LOG_PATH, RUN_NAME))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--horizon', type=int, default=5)
-parser.add_argument('--trajs', '-t', type=int, default=10)
-parser.add_argument('--iterations', type=int, default=10)
+parser.add_argument('--horizon', type=int, default=3)
+parser.add_argument('--trajs', '-t', type=int, default=1)
+parser.add_argument('--iterations', type=int, default=100)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
@@ -107,7 +110,7 @@ def collect_trajs(model):
         xd_fs = []
         yd_fs = []
         for i in range(params["trajs"]):
-            task, xd_f, yd_f = generate_traj()
+            task, xd_f, yd_f = generate_traj(params["horizon"])
             tasks.append(task)
             xd_fs.append(xd_f)
             yd_fs.append(yd_f)
@@ -171,10 +174,10 @@ for i in prog_bar:#tqdm(range(params["iterations"])):
 
 if log:
     writer.close()
-    torch.save(model, os.path.join(logdir, "final_model"))
+    torch.save(model, os.path.join(logdir, "model.pt"))
 
     with open(os.path.join(logdir, "params.json"), "w+") as outfile:
-        json.dump(dictionary, outfile)
+        json.dump(params, outfile)
 
 
 
