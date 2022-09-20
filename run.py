@@ -15,19 +15,16 @@ from datetime import datetime
 import os
 from tqdm import tqdm, trange
 import json
-from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
+#from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
 log = True
 
 LOG_PATH = "./logs"
 BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
 
-RUN_NAME = "car_test1"
+RUN_NAME = "car_test_rand1"
 
 logdir = os.path.join(LOG_PATH, RUN_NAME)
-
-if log:
-    os.mkdir(logdir)
 
 #tensorboard
 if log:
@@ -35,9 +32,9 @@ if log:
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--horizon', type=int, default=3)
-parser.add_argument('--trajs', '-t', type=int, default=1)
-parser.add_argument('--iterations', type=int, default=100)
+parser.add_argument('--horizon', type=int, default=5)
+parser.add_argument('--trajs', '-t', type=int, default=20)
+parser.add_argument('--iterations', type=int, default=1000)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
@@ -91,8 +88,8 @@ elif params["env"] == "a1":
 
         return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
 
-    controller = A1_controller(5, 5, 35, 5, 30)
-    env = A1GymEnv(total_time=params["horizon"])
+    #controller = A1_controller(5, 5, 35, 5, 30)
+    #env = A1GymEnv(total_time=params["horizon"])
 
 else:
     raise NotImplementedError("Environment not implemented")
@@ -173,6 +170,7 @@ for i in prog_bar:#tqdm(range(params["iterations"])):
     optimizer.step()
 
 if log:
+    os.mkdir(logdir)
     writer.close()
     torch.save(model, os.path.join(logdir, "model.pt"))
 

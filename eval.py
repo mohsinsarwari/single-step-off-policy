@@ -91,13 +91,13 @@ def evaluate(path):
 		smart_loss_avg += loss[0] / trials
 		dum_loss_avg += loss[1] / trials
 
-		ax[i, 0].set_title("Using Model (Loss: {})".format(loss[0]))
+		ax[i, 0].set_title("Using Model {} (Loss: {})".format(i, loss[0]))
 		ax[i, 0].plot(des[0], des[1], label="model output")
 		ax[i, 0].plot(act[0], act[1], label="actual")
 		ax[i, 0].plot(tar[0], tar[1], label="task")
 		ax[i, 0].legend()
 
-		ax[i, 1].set_title("Naive (Loss: {})".format(loss[1]))
+		ax[i, 1].set_title("Naive {} (Loss: {})".format(i, loss[1]))
 		ax[i, 1].plot(dum[0], dum[1], label="actual")
 		ax[i, 1].plot(tar[0], tar[1], label="task")
 		ax[i, 1].legend()

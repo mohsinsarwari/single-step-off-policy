@@ -9,7 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torch
 import pdb
-from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
+#from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
 class A1_controller:
     """
@@ -91,7 +91,7 @@ if __name__=="__main__":
     total_time = 8
     times = [0, 3, 8]
     
-    env = A1GymEnv(total_time=total_time, render=True)
+    env = A1_env(total_time=total_time, render=True)
     controller = A1_controller(5, 5, 35, 5, 30)
 
     cs = Spline(times, params[:2], params[2:])
