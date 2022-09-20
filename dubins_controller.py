@@ -9,6 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torch
 import pdb
+from helper import *
 
 class Dubins_controller:
     """
@@ -78,12 +79,12 @@ class Dubins_controller:
         return action, [x_d, y_d], [x_act, y_act]
 
 if __name__=="__main__":
-    total_time = 4
-    env = Dubins_env(total_time=total_time)
+    horizon = 3
+    env = Dubins_env(total_time=horizon)
     controller = Dubins_controller(5, 5, 5, 5)
-    times = np.arange(total_time+1)
-    params = [1, 2, 1, 0, 1, 0, -1, 0]
-    cs = Spline(times, params[:total_time], params[total_time:])
+    params, xd_f, yd_f = generate_traj(horizon)
+
+    cs = Spline(params[:horizon], params[horizon:], xd_0=1, yd_0=0, xd_f=xd_f, yd_f=yd_f)
 
     obs = env.reset()
     done = False
@@ -106,8 +107,8 @@ if __name__=="__main__":
 
     plt.plot(des_x, des_y, label="desired")
     plt.plot(act_x, act_y, label="actual")
-    plt.xlim([-3, 3])
-    plt.ylim([-3, 3])
+    # plt.xlim([-3, 3])
+    # plt.ylim([-3, 3])
     plt.legend()
     plt.show()
 

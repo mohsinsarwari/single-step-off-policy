@@ -6,96 +6,117 @@ import gym
 from helper import *
 from dubins_controller import *
 from dubins_env import *
+from a1_controller import *
+from a1_env import *
 import argparse
 import pdb
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+import os
+from tqdm import tqdm, trange
+import json
+from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
+
+log = False
+
+LOG_PATH = "./logs"
+BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
+
+RUN_NAME = "car_test1"
+
+logdir = os.path.join(LOG_PATH, RUN_NAME)
+
+#tensorboard
+if log:
+    writer = SummaryWriter(log_dir=os.path.join(BOARD_LOG_PATH, RUN_NAME))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--horizon', type=int, default=4)
-parser.add_argument('--trajs', '-t', type=int, default=1)
-parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--loops', type=int, default=100)
-parser.add_argument('--epochs', '-e', type=int, default=10)
+parser.add_argument('--horizon', type=int, default=5)
+parser.add_argument('--trajs', '-t', type=int, default=10)
+parser.add_argument('--iterations', type=int, default=10)
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--total_time', type=float, default=4)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
-
-## Example arg parsers arguments
-# parser.add_argument('--epochs_reward', type=int, default=3)
-# parser.add_argument('--epochs_agent', type=int, default=10)
-# parser.add_argument('--comparisons', type=int, default=5000)
-# parser.add_argument('--algo', type=str, default="ppo")
-# parser.add_argument('--seed', type=int, default=0)
-# parser.add_argument('--fragment_length', type=int, default=50)
-# parser.add_argument('--pref', action='store_true')
-# parser.add_argument('--render', action='store_true')
+parser.add_argument('--initial_pos', type=list, default=[0, 0])
 
 args  = parser.parse_args()
-horizon = args.horizon
-num_trajs = args.trajs
-env_name = args.env
-seed = args.seed
-epochs = args.epochs
-lr = args.lr
-loops = args.loops
-total_time = args.total_time
-dt = args.dt
-times = np.arange(total_time+1)
-input_weight = args.input_weight
-model_scale = 5
+
+params = vars(args)
+
+params["model_scale"] = 20
 
 # Setup problem parameters
 f_nominal = None
 cost = None
 controller = None
-if env_name == "car":
+if params["env"] == "car":
     def f_nominal(x, u): 
         x_clone = x.clone()
-        x_clone[0] = x[0] + x[2] * torch.cos(x[3]) * dt
-        x_clone[1] = x[1] + x[2] * torch.sin(x[3]) * dt
-        x_clone[2] = x[2] + u[0] * dt
-        x_clone[3] = x[3] + u[1] * dt
+        x_clone[0] = x[0] + x[2] * torch.cos(x[3]) * params["dt"]
+        x_clone[1] = x[1] + x[2] * torch.sin(x[3]) * params["dt"]
+        x_clone[2] = x[2] + u[0] * params["dt"]
+        x_clone[3] = x[3] + u[1] * params["dt"]
 
         return x_clone
 
-    def cost(x, u, t, spline_params):
+    def cost(x, u, t, task, xd_f, yd_f):
 
-        spline = Spline(times, spline_params[1:total_time+1], spline_params[total_time+2:], spline_params[0], spline_params[total_time+1])
+        spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
         x_d, y_d = spline.evaluate(t, der=0)
 
-        return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (input_weight * (u[0]**2 + u[1]**2))
+        return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
 
-    def sample_task():
-        #task = torch.tensor([0, 1, 2, 0, 1, 0], dtype=torch.float) #torch.tensor([0, 1, 2, 1, 0, 0, 1, 0, -1, 0], dtype=torch.float)
-        task = torch.tensor([0, 1, 2, 1, 0, 0, 1, 0, -1, 0], dtype=torch.float)
-        return task
+    controller = Dubins_controller(k_x=3, k_y=3, k_v=3, k_phi=3)
+    env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
 
-    controller = Dubins_controller(k_x=5, k_y=5, k_v=5, k_phi=5)
-    env = Dubins_env(total_time=total_time, dt=dt)
+elif params["env"] == "a1":
+    def f_nominal(x, u): 
+        x_clone = x.clone()
+        x_clone[0] = x[0] + x[2] * torch.cos(x[3]) * params["dt"]
+        x_clone[1] = x[1] + x[2] * torch.sin(x[3]) * params["dt"]
+        x_clone[2] = x[2] + u[0] * params["dt"]
+        x_clone[3] = x[3] + x[4] * params["dt"]
+        x_clone[4] = x[4] + u[1] * params["dt"]
+
+        return x_clone
+
+    def cost(x, u, t, task, xd_f, yd_f):
+
+        spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+        x_d, y_d = spline.evaluate(t, der=0)
+
+        return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
+
+    controller = A1_controller(5, 5, 35, 5, 30)
+    env = A1GymEnv(total_time=params["horizon"])
 
 else:
     raise NotImplementedError("Environment not implemented")
+
+# Setup NN
+model = make_model([2*params["horizon"], 20, 20, 2*params["horizon"]])
 
 # Collect trajectories function
 def collect_trajs(model):
 
     with torch.no_grad():
-        # env.seed(seed)
-        # np.random.seed(seed)
-        # torch.manual_seed(seed)
         trajs = []
         x0s = []
         tasks = []
-        for i in range(num_trajs):
-            task = sample_task()
+        xd_fs = []
+        yd_fs = []
+        for i in range(params["trajs"]):
+            task, xd_f, yd_f = generate_traj()
             tasks.append(task)
-            spline_params = model(task)*model_scale
-            spline = Spline(times, spline_params[:total_time], spline_params[total_time:])
+            xd_fs.append(xd_f)
+            yd_fs.append(yd_f)
+            spline_params = model(task)*params["model_scale"]
+            spline = Spline(spline_params[:params["horizon"]], spline_params[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
             traj = []
             obs = env.reset()
             x0s.append(obs)
-            for j in np.arange(0, total_time, dt):
+            for j in np.arange(0, params["horizon"], params["dt"]):
                 action, _, _ = controller.next_action(j, spline, obs)
                 next_obs, reward, done, info = env.step(action)
                 traj.append((obs, action, reward, next_obs, done))
@@ -110,71 +131,50 @@ def collect_trajs(model):
                 dyn_tuples.append((obs, action, next_obs))
             fs.append(dyn_tuples)
 
-    return fs, x0s, tasks
-
-# Setup NN
-torch.autograd.set_detect_anomaly(True)
-model = make_model([2*len(times), 32, 32, 2*(len(times)-1)])
+    return fs, x0s, tasks, xd_fs, yd_fs
 
 # Training Loop
-
-optimizer = optim.Adam(model.parameters(), lr=lr)
-for loop in range(loops):
+optimizer = optim.Adam(model.parameters(), lr=params["lr"])
+prog_bar = trange(params["iterations"], leave=True)
+for i in prog_bar:#tqdm(range(params["iterations"])):
     optimizer.zero_grad() 
 
     # Collect trajectories
-    dynamics, x0s, tasks = collect_trajs(model)
+    dynamics, x0s, tasks, xd_fs, yd_fs = collect_trajs(model)
 
     # Construct loss function
     loss = 0
-    for (dyn, x0, task) in zip(dynamics, x0s, tasks):
+    for (dyn, x0, task, xd_f, yd_f) in zip(dynamics, x0s, tasks, xd_fs, yd_fs):
+
         x = x0
+
         def f(x,u,t): 
             return f_nominal(x,u) + dyn[t][2] - f_nominal(dyn[t][0], dyn[t][1]).detach()
-        spline_params = model(task)*model_scale
 
-        des_x = []
-        des_y = []
-        act_x = []
-        act_y = []
-        tar_x = []
-        tar_y = []
+        spline_params = model(task)*params["model_scale"]
 
-        spline = Spline(times, spline_params[:total_time], spline_params[total_time:])
-        for t in np.arange(0, total_time, dt):
+        spline = Spline(spline_params[:params["horizon"]], spline_params[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+        for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)
 
-            target = Spline(times, task[1:total_time+1], task[total_time+2:], task[0], task[total_time+1])
-            tar_pos_x, tar_pos_y = target.evaluate(t, der=0)
+            loss += cost(x, u, t, task, xd_f, yd_f)
+            x = f(x, u, int(t/params["dt"]))
 
-            loss += cost(x, u, t, task)
-            x = f(x, u, int(t//dt))
-
-            des_x.append(des_pos[0].detach().numpy())
-            des_y.append(des_pos[1].detach().numpy())
-            act_x.append(act_pos[0].detach().numpy())
-            act_y.append(act_pos[1].detach().numpy())
-            tar_x.append(tar_pos_x.detach().numpy())
-            tar_y.append(tar_pos_y.detach().numpy())
+    prog_bar.set_description("Loss: {}".format(loss), refresh=True)
 
     # Backprop
-    # for epoch in range(epochs): 
+    if log:
+        writer.add_scalar("Loss/Train", loss.item(), i)
     loss.retain_grad()
     loss.backward(retain_graph=True)
     optimizer.step()
-    # with torch.no_grad():
-    #     for p in model.parameters():
-    #         new_val = p - p.grad*lr
-    #         p.copy_(new_val)
-    print("Loss: ", loss)
+
+if log:
+    writer.close()
+    torch.save(model, os.path.join(logdir, "final_model"))
+
+    with open(os.path.join(logdir, "params.json"), "w+") as outfile:
+        json.dump(dictionary, outfile)
 
 
-with torch.no_grad():
-    plt.plot(des_x, des_y, label="model output")
-    plt.plot(act_x, act_y, label="actual")
-    plt.plot(tar_x, tar_y, label="desired")
-    plt.legend()
-    plt.show()
-    #print("Params Diff: ", np.linalg.norm(np.array([x.detach().numpy() for x in model.parameters()]) - last))
 
-# Test NN
