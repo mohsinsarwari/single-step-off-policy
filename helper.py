@@ -17,13 +17,13 @@ def sample_task():
 	task = torch.tensor([1, 2, 3, 1, 2, 3], dtype=torch.float)
 	return task, 0, 0
 
-def generate_traj(horizon=5, noise=0.1):
+def generate_traj(horizon=5, noise=0.1, dev=torch.device("cpu")):
 	xs = []
 	ys = []
 	dt = 0.1
 
-	v = np.random.uniform(1,5)
-	theta = np.random.uniform(-np.pi/2,np.pi/2)
+	v = np.random.uniform(1,4)
+	theta = np.random.uniform(-np.pi/4,np.pi/4)
 
 	x = 0
 	y = 0
@@ -51,18 +51,21 @@ def generate_traj(horizon=5, noise=0.1):
 	xd_f = (x - x_prev)/dt
 	yd_f = (y - y_prev)/dt
 
-	return torch.hstack((torch.tensor(xs, dtype=torch.float), torch.tensor(ys, dtype=torch.float))), xd_f, yd_f
+	res = torch.hstack((torch.tensor(xs, dtype=torch.float), torch.tensor(ys, dtype=torch.float), 
+				torch.tensor(xd_f, dtype=torch.float), torch.tensor(yd_f, dtype=torch.float)))
+
+	return res.to(dev)
 
 
 if __name__ == "__main__":
 
-	horizon = 5
+	horizon = 3
 
-	for i in range(1):
+	for i in range(10):
 
-		task, xd_f, yd_f = generate_traj(horizon)
+		task = generate_traj(horizon)
 
-		cs = Spline(task[:horizon], task[horizon:], xd_0=5, yd_0=2, xd_f=xd_f, yd_f=yd_f)
+		cs = Spline(task[:horizon], task[horizon:-2], xd_f=task[-2], yd_f=task[-1])
 
 		times = np.linspace(0, horizon, 40)
 		xs = []

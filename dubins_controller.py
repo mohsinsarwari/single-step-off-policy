@@ -81,10 +81,10 @@ class Dubins_controller:
 if __name__=="__main__":
     horizon = 3
     env = Dubins_env(total_time=horizon)
-    controller = Dubins_controller(5, 5, 5, 5)
-    params, xd_f, yd_f = generate_traj(horizon)
+    controller = Dubins_controller(3, 3, 3, 3)
+    params = generate_traj(horizon)
 
-    cs = Spline(params[:horizon], params[horizon:], xd_0=1, yd_0=0, xd_f=xd_f, yd_f=yd_f)
+    cs = Spline(params[:horizon], params[horizon:-2], xd_0=1, yd_0=0, xd_f=params[-2], yd_f=params[-1])
 
     obs = env.reset()
     done = False

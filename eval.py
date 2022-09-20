@@ -24,12 +24,13 @@ def evaluate_once(path):
 		controller = Dubins_controller(k_x=3, k_y=3, k_v=3, k_phi=3)
 		env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
 		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
+		
+	task = generate_traj(params["horizon"])
+	deltas = model(task).cpu()*params["model_scale"]
+	task_adj = task + deltas
 
-	task, xd_f, yd_f = generate_traj(params["horizon"])
-	spline_params = model(task)*params["model_scale"]
-
-	spline = Spline(spline_params[:params["horizon"]], spline_params[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
-	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+	spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1])
+	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
 
 	des_x = []
 	des_y = []
@@ -53,8 +54,7 @@ def evaluate_once(path):
 		obs, reward, done, info = env.step(u)
 		dum_obs, _, _, _ = dum_env.step(dum_u)
 
-		target = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
-		tar_pos_x, tar_pos_y = target.evaluate(t, der=0)
+		tar_pos_x, tar_pos_y = task_spline.evaluate(t, der=0)
 
 		des_x.append(des_pos[0].detach().numpy())
 		des_y.append(des_pos[1].detach().numpy())
@@ -65,14 +65,14 @@ def evaluate_once(path):
 		dum_x.append(dum_pos[0].detach().numpy())
 		dum_y.append(dum_pos[1].detach().numpy())
 
-		smart_loss += cost(obs, u, t, task, xd_f, yd_f, params).detach().numpy()
-		dum_loss += cost(dum_obs, dum_u, t, task, xd_f, yd_f, params).detach().numpy()
+		smart_loss += cost(obs, u, t, task, params).detach().numpy()
+		dum_loss += cost(dum_obs, dum_u, t, task, params).detach().numpy()
 
 	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss]
 
-def cost(x, u, t, task, xd_f, yd_f, params):
+def cost(x, u, t, task, params):
 
-    spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+    spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
     x_d, y_d = spline.evaluate(t, der=0)
 
     return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))

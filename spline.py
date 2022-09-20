@@ -15,7 +15,7 @@ class Spline():
     xd, yd are the velocities
     times by default assume a second between each of the coords
     """
-    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=0, yd_f=0, times=None):
+    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=0, yd_f=0, times=None, dev=torch.device("cpu")):
 
         if times is None:
             times = np.arange(len(x_coord) + 1)
@@ -32,8 +32,8 @@ class Spline():
         self.A_x = []
         self.A_y = []
 
-        self.b_x = torch.zeros(4*(n-1), dtype=torch.double)
-        self.b_y = torch.zeros(4*(n-1), dtype=torch.double)
+        self.b_x = torch.zeros(4*(n-1), dtype=torch.double, device=dev)
+        self.b_y = torch.zeros(4*(n-1), dtype=torch.double, device=dev)
 
         j=0 #index for b vectors
 
@@ -140,8 +140,8 @@ class Spline():
                 self.b_y[j+3] = 0
                 j += 4
 
-        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x))
-        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y))
+        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x)).to(dev)
+        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y)).to(dev)
 
         self.coeffs_x = torch.matmul(self.A_x, self.b_x)
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)

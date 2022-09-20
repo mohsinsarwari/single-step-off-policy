@@ -22,7 +22,7 @@ log = True
 LOG_PATH = "./logs"
 BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
 
-RUN_NAME = "car_test_rand1"
+RUN_NAME = "full_car_test"
 
 logdir = os.path.join(LOG_PATH, RUN_NAME)
 
@@ -32,8 +32,8 @@ if log:
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--horizon', type=int, default=5)
-parser.add_argument('--trajs', '-t', type=int, default=20)
+parser.add_argument('--horizon', type=int, default=3)
+parser.add_argument('--trajs', '-t', type=int, default=10)
 parser.add_argument('--iterations', type=int, default=1000)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--dt', type=float, default=0.01)
@@ -44,7 +44,10 @@ args  = parser.parse_args()
 
 params = vars(args)
 
-params["model_scale"] = 20
+params["model_scale"] = 5
+
+dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print("-------Using {} ----------".format(dev))
 
 # Setup problem parameters
 f_nominal = None
@@ -60,15 +63,15 @@ if params["env"] == "car":
 
         return x_clone
 
-    def cost(x, u, t, task, xd_f, yd_f):
+    def cost(x, u, t, task):
 
-        spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+        spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1], dev=dev)
         x_d, y_d = spline.evaluate(t, der=0)
 
         return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
 
     controller = Dubins_controller(k_x=3, k_y=3, k_v=3, k_phi=3)
-    env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
+    env = Dubins_env(total_time=params["horizon"], dt=params["dt"], dev=dev)
 
 elif params["env"] == "a1":
     def f_nominal(x, u): 
@@ -81,9 +84,9 @@ elif params["env"] == "a1":
 
         return x_clone
 
-    def cost(x, u, t, task, xd_f, yd_f):
+    def cost(x, u, t, task):
 
-        spline = Spline(task[:params["horizon"]], task[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+        spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1], dev=dev)
         x_d, y_d = spline.evaluate(t, der=0)
 
         return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
@@ -95,7 +98,10 @@ else:
     raise NotImplementedError("Environment not implemented")
 
 # Setup NN
-model = make_model([2*params["horizon"], 20, 20, 2*params["horizon"]])
+# Input: [x0, x1, ..., y0, y1, ..., xd_f, yd_f]
+# Output: Deltas on the above
+model = make_model([2*params["horizon"]+2, 20, 20, 2*params["horizon"]+2])
+model.to(dev)
 
 # Collect trajectories function
 def collect_trajs(model):
@@ -104,15 +110,12 @@ def collect_trajs(model):
         trajs = []
         x0s = []
         tasks = []
-        xd_fs = []
-        yd_fs = []
         for i in range(params["trajs"]):
-            task, xd_f, yd_f = generate_traj(params["horizon"])
+            task = generate_traj(params["horizon"], dev=dev)
             tasks.append(task)
-            xd_fs.append(xd_f)
-            yd_fs.append(yd_f)
-            spline_params = model(task)*params["model_scale"]
-            spline = Spline(spline_params[:params["horizon"]], spline_params[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+            deltas = model(task)*params["model_scale"]
+            task_adj = task + deltas
+            spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1], dev=dev)
             traj = []
             obs = env.reset()
             x0s.append(obs)
@@ -131,7 +134,7 @@ def collect_trajs(model):
                 dyn_tuples.append((obs, action, next_obs))
             fs.append(dyn_tuples)
 
-    return fs, x0s, tasks, xd_fs, yd_fs
+    return fs, x0s, tasks
 
 # Training Loop
 optimizer = optim.Adam(model.parameters(), lr=params["lr"])
@@ -140,24 +143,24 @@ for i in prog_bar:#tqdm(range(params["iterations"])):
     optimizer.zero_grad() 
 
     # Collect trajectories
-    dynamics, x0s, tasks, xd_fs, yd_fs = collect_trajs(model)
+    dynamics, x0s, tasks = collect_trajs(model)
 
     # Construct loss function
     loss = 0
-    for (dyn, x0, task, xd_f, yd_f) in zip(dynamics, x0s, tasks, xd_fs, yd_fs):
+    for (dyn, x0, task) in zip(dynamics, x0s, tasks):
 
         x = x0
 
         def f(x,u,t): 
             return f_nominal(x,u) + dyn[t][2] - f_nominal(dyn[t][0], dyn[t][1]).detach()
 
-        spline_params = model(task)*params["model_scale"]
-
-        spline = Spline(spline_params[:params["horizon"]], spline_params[params["horizon"]:], xd_f=xd_f, yd_f=yd_f)
+        deltas = model(task)*params["model_scale"]
+        task_adj = task + deltas
+        spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1], dev=dev)
         for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)
 
-            loss += cost(x, u, t, task, xd_f, yd_f)
+            loss += cost(x, u, t, task)
             x = f(x, u, int(t/params["dt"]))
 
     prog_bar.set_description("Loss: {}".format(loss), refresh=True)
@@ -172,7 +175,7 @@ for i in prog_bar:#tqdm(range(params["iterations"])):
 if log:
     os.mkdir(logdir)
     writer.close()
-    torch.save(model, os.path.join(logdir, "model.pt"))
+    torch.save(model.cpu(), os.path.join(logdir, "model.pt"))
 
     with open(os.path.join(logdir, "params.json"), "w+") as outfile:
         json.dump(params, outfile)
