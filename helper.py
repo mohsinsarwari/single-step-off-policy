@@ -77,7 +77,7 @@ def a1_nominal(x, u, dt):
 
 nominals = {"car": car_nominal, "a1": a1_nominal}
 
-def cost(x, u, t, task, params, dev):
+def cost(x, u, t, task, params, dev=torch.device("cpu")):
 
     spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1], dev=dev)
     x_d, y_d = spline.evaluate(t, der=0)
