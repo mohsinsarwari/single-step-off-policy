@@ -70,13 +70,6 @@ def evaluate_once(path):
 
 	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss]
 
-def cost(x, u, t, task, params):
-
-    spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
-    x_d, y_d = spline.evaluate(t, der=0)
-
-    return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
-
 def evaluate(path):
 
 	trials = 3
@@ -92,14 +85,14 @@ def evaluate(path):
 		dum_loss_avg += loss[1] / trials
 
 		ax[i, 0].set_title("Using Model {} (Loss: {})".format(i, loss[0]))
+		ax[i, 0].plot(tar[0], tar[1], "b", label="task")
 		ax[i, 0].plot(des[0], des[1], label="model output")
-		ax[i, 0].plot(act[0], act[1], label="actual")
-		ax[i, 0].plot(tar[0], tar[1], label="task")
+		ax[i, 0].plot(act[0], act[1], "orange", label="actual")
 		ax[i, 0].legend()
 
 		ax[i, 1].set_title("Naive {} (Loss: {})".format(i, loss[1]))
-		ax[i, 1].plot(dum[0], dum[1], label="actual")
-		ax[i, 1].plot(tar[0], tar[1], label="task")
+		ax[i, 1].plot(tar[0], tar[1], "b", label="task")
+		ax[i, 1].plot(dum[0], dum[1], "orange", label="actual")
 		ax[i, 1].legend()
 
 	for a in ax.flat:

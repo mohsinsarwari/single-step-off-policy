@@ -29,11 +29,13 @@ class Spline():
         
         row_length = 4 * (n-1)
 
+        self.dev = dev
+
         self.A_x = []
         self.A_y = []
 
-        self.b_x = torch.zeros(4*(n-1), dtype=torch.double, device=dev)
-        self.b_y = torch.zeros(4*(n-1), dtype=torch.double, device=dev)
+        self.b_x = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
+        self.b_y = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
 
         j=0 #index for b vectors
 
@@ -140,12 +142,59 @@ class Spline():
                 self.b_y[j+3] = 0
                 j += 4
 
-        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x)).to(dev)
-        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y)).to(dev)
+        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x)).to(self.dev)
+        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y)).to(self.dev)
 
         self.coeffs_x = torch.matmul(self.A_x, self.b_x)
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)
 
+    def update(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=0, yd_f=0):
+        n = len(self.times)
+        assert n == len(x_coord) + 1, "lengths don't match"
+        assert n == len(y_coord) + 1, "lengths don't match"
+
+        self.b_x = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
+        self.b_y = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
+
+        j=0 #index for b vectors
+
+        for i in np.arange(n):
+            t = self.times[i]
+            if i == 0:
+                x = 0
+                y = 0
+            else: 
+                x = x_coord[i-1]
+                y = y_coord[i-1]
+
+            if i == 0:
+                self.b_x[j] = x
+                self.b_x[j+1] = -xd_0
+                self.b_y[j] = y
+                self.b_y[j+1] = -yd_0
+                j += 2
+
+            if i == n-1:
+                self.b_x[j] = x
+                self.b_x[j+1] = xd_f
+                self.b_y[j] = y
+                self.b_y[j+1] = yd_f
+                j += 2
+
+            if i != 0 and i != n-1:
+                #second derivative rows
+                self.b_x[j] = x
+                self.b_x[j+1] = x
+                self.b_x[j+2] = 0
+                self.b_x[j+3] = 0
+                self.b_y[j] = y
+                self.b_y[j+1] = y
+                self.b_y[j+2] = 0
+                self.b_y[j+3] = 0
+                j += 4
+
+        self.coeffs_x = torch.matmul(self.A_x, self.b_x)
+        self.coeffs_y = torch.matmul(self.A_y, self.b_y)
 
     def evaluate(self, t, der=0):
 
@@ -179,9 +228,10 @@ class Spline():
         return res_x, res_y
 
 
-
 if __name__=="__main__":
     cs = Spline([1, 2], [1, 0], xd_0=1, yd_0=0)
+    cs.update([1, 4], [1, 2])
+    cs.update([1, 8], [1, 1])
     times = np.linspace(0, 2, 80)
 
     xs = []
@@ -194,6 +244,8 @@ if __name__=="__main__":
 
     plt.plot(xs, ys)
     plt.show()
+
+
 
 
 

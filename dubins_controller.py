@@ -82,7 +82,7 @@ if __name__=="__main__":
     horizon = 3
     env = Dubins_env(total_time=horizon, f_v=0.5, f_phi=0.25)
     controller = Dubins_controller(3, 3, 3, 3)
-    params = generate_traj(horizon)
+    params = generate_traj(horizon, 0, [1, 5], [-1.5, 1.5])
 
     cs = Spline(params[:horizon], params[horizon:-2], xd_0=1, yd_0=0, xd_f=params[-2], yd_f=params[-1])
 
