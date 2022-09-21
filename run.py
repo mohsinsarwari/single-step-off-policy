@@ -21,10 +21,11 @@ import time
 
 ######################### Parameter STUFF ######################
 parser = argparse.ArgumentParser()
+parser.add_argument('--run_name', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
 parser.add_argument('--horizon', type=int, default=3)
 parser.add_argument('--trajs', '-t', type=int, default=30)
-parser.add_argument('--iterations', type=int, default=500)
+parser.add_argument('--iterations', type=int, default=800)
 parser.add_argument('--lr', type=float, default=5e-3)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
@@ -36,7 +37,7 @@ parser.add_argument('--a1_controller_weights', type=list, default=[5, 5, 35, 5, 
 
 parser.add_argument('--traj_v_range', type=list, default=[1, 4])
 parser.add_argument('--traj_theta_range', type=list, default=[-np.pi/4, np.pi/4])
-parser.add_argument('--traj_noise', type=float, default=0.25)
+parser.add_argument('--traj_noise', type=float, default=0)
 
 parser.add_argument('--model_scale', type=float, default=3)
 
@@ -47,12 +48,12 @@ params = vars(args)
 ####################### LOGGING STUFF #########################
 LOG_PATH = "./logs"
 BOARD_LOG_PATH = os.path.join(LOG_PATH, "tensorboard_logs")
-log = int(input("Log this run? [1/0]"))
+log = params["run_name"]
 
 if log:
-    RUN_NAME = input("Select Run Name")
-    logdir = os.path.join(LOG_PATH, RUN_NAME)
-    writer = SummaryWriter(log_dir=os.path.join(BOARD_LOG_PATH, RUN_NAME))
+    print("-----------Logging to {} -----------".format(log))
+    logdir = os.path.join(LOG_PATH, log)
+    writer = SummaryWriter(log_dir=os.path.join(BOARD_LOG_PATH, log))
 
 ################### TORCH DEVICE SET ############################
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
