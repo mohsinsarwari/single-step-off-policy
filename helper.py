@@ -101,7 +101,7 @@ def collect_trajs(model, env, controller, params, dev):
             obs = env.reset()
             x0s.append(obs)
             for j in np.arange(0, params["horizon"], params["dt"]):
-                action, _, _ = controller.next_action(j, spline, obs)
+                action, des_pos, act_pos = controller.next_action(j, spline, obs)
                 next_obs, reward, done, info = env.step(action)
                 traj.append((obs, action, reward, next_obs, done))
                 obs = next_obs
@@ -139,7 +139,6 @@ if __name__ == "__main__":
 		plt.plot(xs, ys)
 
 	plt.show()
-
 
 
 

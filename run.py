@@ -113,7 +113,8 @@ for i in prog_bar:
         for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)
 
-            loss += cost(x, u, t, task, params, dev)
+            if (t % (2*params["dt"]) == 0):
+                loss += cost(x, u, t, task, params, dev)
                 
             x = f(x, u, int(t/params["dt"]))
 
