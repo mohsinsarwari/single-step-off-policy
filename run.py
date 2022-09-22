@@ -24,9 +24,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--run_name', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
 parser.add_argument('--horizon', type=int, default=3)
-parser.add_argument('--trajs', '-t', type=int, default=30)
-parser.add_argument('--iterations', type=int, default=800)
-parser.add_argument('--lr', type=float, default=5e-3)
+parser.add_argument('--trajs', '-t', type=int, default=50)
+parser.add_argument('--iterations', type=int, default=500)
+parser.add_argument('--lr', type=float, default=5e-4)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
 
@@ -35,8 +35,8 @@ parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95])
 
 parser.add_argument('--a1_controller_weights', type=list, default=[5, 5, 35, 5, 30])
 
-parser.add_argument('--traj_v_range', type=list, default=[1, 4])
-parser.add_argument('--traj_theta_range', type=list, default=[-np.pi/4, np.pi/4])
+parser.add_argument('--traj_v_range', type=list, default=[1, 5])
+parser.add_argument('--traj_theta_range', type=list, default=[-1.5, 1.5])
 parser.add_argument('--traj_noise', type=float, default=0)
 
 parser.add_argument('--model_scale', type=float, default=3)
@@ -90,8 +90,6 @@ model.to(dev)
 #################### TRAINING LOOP ##################################
 optimizer = optim.Adam(model.parameters(), lr=params["lr"])
 
-spline = Spline(np.arange(1, params["horizon"] + 1), np.arange(1, params["horizon"] + 1), dev=dev)
-
 prog_bar = trange(params["iterations"], leave=True)
 for i in prog_bar:
 
@@ -110,7 +108,7 @@ for i in prog_bar:
 
         deltas = model(task)*params["model_scale"]
         task_adj = task + deltas
-        spline.update(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1])
+        spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1], dev=dev)
 
         for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)

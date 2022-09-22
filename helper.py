@@ -91,13 +91,12 @@ def collect_trajs(model, env, controller, params, dev):
         trajs = []
         x0s = []
         tasks = []
-        spline = Spline(np.arange(1, params["horizon"] + 1), np.arange(1, params["horizon"] + 1), dev=dev)
         for i in range(params["trajs"]):
             task = generate_traj(params["horizon"], params["traj_noise"], params["traj_v_range"], params["traj_theta_range"], dev=dev)
             tasks.append(task)
             deltas = model(task)*params["model_scale"]
             task_adj = task + deltas
-            spline.update(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1])
+            spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1])
             traj = []
             obs = env.reset()
             x0s.append(obs)
