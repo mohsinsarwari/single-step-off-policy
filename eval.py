@@ -13,19 +13,17 @@ import json
 
 
 
-def evaluate_once(path):
-
-	model = torch.load(os.path.join(path, "model.pt"))
-
-	with open(os.path.join(path, 'params.json')) as json_file:
-		params = json.load(json_file)
+def evaluate_once(model, params):
 
 	if params["env"] == "car":
-		controller = Dubins_controller(k_x=3, k_y=3, k_v=3, k_phi=3)
-		env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
-		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"])
+		weights = params["dubins_controller_weights"]
+		coeffs = params["dubins_dyn_coeffs"]
+
+		controller = Dubins_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3])
+		env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2])
+		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2])
 		
-	task = generate_traj(params["horizon"])
+	task = generate_traj(params["horizon"], params["traj_noise"], params["traj_v_range"], params["traj_theta_range"])
 	deltas = model(task).cpu()*params["model_scale"]
 	task_adj = task + deltas
 
@@ -47,6 +45,7 @@ def evaluate_once(path):
 	dum_obs = dum_env.reset()
 	smart_loss = 0
 	dum_loss = 0
+	i = 0
 	for t in np.arange(0, params["horizon"], params["dt"]):
 		u, des_pos, act_pos= controller.next_action(t, spline, obs)
 		dum_u, _, dum_pos = controller.next_action(t, task_spline, dum_obs)
@@ -65,6 +64,7 @@ def evaluate_once(path):
 		dum_x.append(dum_pos[0].detach().numpy())
 		dum_y.append(dum_pos[1].detach().numpy())
 
+
 		smart_loss += cost(obs, u, t, task, params).detach().numpy()
 		dum_loss += cost(dum_obs, dum_u, t, task, params).detach().numpy()
 
@@ -79,8 +79,12 @@ def evaluate(path):
 	smart_loss_avg = 0
 	dum_loss_avg = 0
 
+	model = torch.load(os.path.join(path, "model.pt"))
+	with open(os.path.join(path, 'params.json')) as json_file:
+		params = json.load(json_file)
+
 	for i in range(trials):
-		des, act, tar, dum, loss = evaluate_once(path)
+		des, act, tar, dum, loss = evaluate_once(model, params)
 		smart_loss_avg += loss[0] / trials
 		dum_loss_avg += loss[1] / trials
 
@@ -96,7 +100,7 @@ def evaluate(path):
 		ax[i, 1].legend()
 
 	for a in ax.flat:
-	    a.label_outer()
+		a.label_outer()
 
 	print("Avg Model Loss: ", smart_loss_avg)
 	print("Avg Naive Loss: ", dum_loss_avg)

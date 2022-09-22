@@ -16,6 +16,7 @@ import os
 from tqdm import tqdm, trange
 import json
 import time
+from eval import evaluate_once
 # from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
 
@@ -24,8 +25,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--run_name', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
 parser.add_argument('--horizon', type=int, default=3)
-parser.add_argument('--trajs', '-t', type=int, default=50)
-parser.add_argument('--iterations', type=int, default=500)
+parser.add_argument('--trajs', '-t', type=int, default=60)
+parser.add_argument('--iterations', type=int, default=800)
 parser.add_argument('--lr', type=float, default=5e-4)
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--input_weight', type=float, default=0)
@@ -53,10 +54,11 @@ log = params["run_name"]
 if log:
     print("-----------Logging to {} -----------".format(log))
     logdir = os.path.join(LOG_PATH, log)
+    os.mkdir(logdir)
     writer = SummaryWriter(log_dir=os.path.join(BOARD_LOG_PATH, log))
 
 ################### TORCH DEVICE SET ############################
-dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+dev = torch.device("cpu") #torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-------Using {} ----------".format(dev))
 
 
@@ -84,12 +86,14 @@ else:
 # Input: [x0, x1, ..., y0, y1, ..., xd_f, yd_f]
 # Output: Deltas on the above
 # make_model in helper.py
-model = make_model([2*params["horizon"]+2, 32, 32, 2*params["horizon"]+2])
+model = make_model([2*params["horizon"]+2, 64, 64, 2*params["horizon"]+2])
 model.to(dev)
 
 #################### TRAINING LOOP ##################################
 optimizer = optim.Adam(model.parameters(), lr=params["lr"])
+#spline = Spline(range(1, params["horizon"]+1), range(1, params["horizon"]+1), dev=dev)
 
+best_loss = np.inf
 prog_bar = trange(params["iterations"], leave=True)
 for i in prog_bar:
 
@@ -110,30 +114,38 @@ for i in prog_bar:
         task_adj = task + deltas
         spline = Spline(task_adj[:params["horizon"]], task_adj[params["horizon"]:-2], xd_f=task_adj[-2], yd_f=task_adj[-1], dev=dev)
 
+        i = 0
         for t in np.arange(0, params["horizon"], params["dt"]):
             u, des_pos, act_pos= controller.next_action(t, spline, x)
 
-            if (t % (2*params["dt"]) == 0):
+            if (i % 5 == 0):
                 loss += cost(x, u, t, task, params, dev)
                 
             x = f(x, u, int(t/params["dt"]))
 
-    prog_bar.set_description("Loss: {}".format(loss), refresh=True)
+            i += 1
 
+    # Checkpoint
     if log:
         writer.add_scalar("Loss/Train", loss.item(), i)
+
+        if (i % 50 == 0):
+            if loss.item() < best_loss:
+                torch.save(model.cpu(), os.path.join(logdir, "model.pt"))
+                best_loss = loss.item()
+
 
     # Backprop
     loss.retain_grad()
     loss.backward(retain_graph=True)
     optimizer.step()
 
+    prog_bar.set_description("Loss: {}".format(loss), refresh=True)
+
 
 ########################### FINAL LOGGING STUFF ###########################
 if log:
-    os.mkdir(logdir)
     writer.close()
-    torch.save(model.cpu(), os.path.join(logdir, "model.pt"))
 
     with open(os.path.join(logdir, "params.json"), "w+") as outfile:
         json.dump(params, outfile)
