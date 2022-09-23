@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import gym
+gym.logger.set_level(40)
 from helper import *
 from dubins_controller import *
 from dubins_env import *

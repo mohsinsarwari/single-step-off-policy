@@ -1,4 +1,5 @@
 import gym
+gym.logger.set_level(40)
 from gym import spaces
 from gym.utils import seeding
 import numpy as np
