@@ -98,7 +98,7 @@ else:
     raise NotImplementedError("Environment not implemented")
 
 #################### NEURAL NETWORK SETUP ##########################
-# Input: [x0, x1, ..., y0, y1, ..., xd_f, yd_f]
+# Input: [x0, x1, ..., y0, y1, ..., v0, phi0]
 # Output: Deltas on the above
 # make_model in helper.py
 model = make_model([num_input_states, 64, 64, num_output_states])
