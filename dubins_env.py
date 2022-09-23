@@ -11,15 +11,16 @@ class Dubins_env(gym.Env):
     """
     Description:
         Version of Dubins Car Model
+        x, y, v, phi
     """
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, total_time=10, dt=0.01, f_v=0.1, f_phi=0.05, scale=0.95):
+    def __init__(self, total_time=10, dt=0.01, f_v=0.1, f_phi=0.05, scale=0.95, v0=0, phi0=0):
 
         max_state = np.array([100, 100, 100, 100])
         max_input = np.array([10, 10])
-        self.action_space = spaces.Box(low=-max_input, high=max_input, shape=(2,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-max_state, high=max_state, shape=(4,), dtype=np.float32)
+        self.action_space = spaces.Box(low=-max_input, high=max_input, shape=(2,), dtype=np.float)
+        self.observation_space = spaces.Box(low=-max_state, high=max_state, shape=(4,), dtype=np.float)
         
         self.num_steps = total_time // dt
         self.total_time = total_time
@@ -29,6 +30,8 @@ class Dubins_env(gym.Env):
         self.f_v = f_v
         self.f_phi = f_phi
         self.scale = scale
+        self.v0 = v0
+        self.phi0 = phi0
 
     def seed(self,seed=None):
         self.np_random,seed=seeding.np_random(seed)
@@ -63,9 +66,13 @@ class Dubins_env(gym.Env):
     def time(self):
         return self.curr_step*self.dt
 
+    #We have this return v_init and phi_init so they can be added to task for input to the model
     def reset(self):
 
-        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
+        v_init = np.random.uniform(0, self.v0)
+        phi_init = np.random.uniform(-self.phi0, self.phi0)
+
+        self.state = torch.tensor([0, 0, v_init, phi_init], dtype=torch.float)
         self.curr_step = 0
         self.done = False
 

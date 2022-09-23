@@ -31,9 +31,6 @@ def generate_traj(horizon=5, noise=0.6, v_range=[1, 4], theta_range=[-np.pi/4, n
 
 	for i in range(int(horizon/dt) + 1):
 
-		x_prev = x
-		y_prev = y
-
 		x_dot = v * np.cos(psi)
 		y_dot = v * np.sin(psi)
 		psi_dot = theta
@@ -48,16 +45,12 @@ def generate_traj(horizon=5, noise=0.6, v_range=[1, 4], theta_range=[-np.pi/4, n
 			xs.append(x)
 			ys.append(y)
 
-	xd_f = (x - x_prev)/dt
-	yd_f = (y - y_prev)/dt
-
-	res = torch.hstack((torch.tensor(xs, dtype=torch.float), torch.tensor(ys, dtype=torch.float), 
-				torch.tensor(xd_f, dtype=torch.float), torch.tensor(yd_f, dtype=torch.float)))
+	res = torch.hstack((torch.tensor(xs, dtype=torch.float), torch.tensor(ys, dtype=torch.float)))
 
 	return res
 
 def find_points(task, params):
-	spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
+	spline = Spline(task[:params["horizon"]], task[params["horizon"]:])
 	ts = np.linspace(0, params["horizon"], params["points_per_sec"]*params["horizon"] + 1)
 	xs = []
 	ys = []
@@ -92,10 +85,15 @@ nominals = {"car": car_nominal, "a1": a1_nominal}
 
 def cost(x, u, t, task, params):
 
-    spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
+    spline = Spline(task[:params["horizon"]], task[params["horizon"]:])
     x_d, y_d = spline.evaluate(t, der=0)
 
     return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
+
+def model_input(task, obs, params):
+	if params["env"] == "car":
+		res = torch.hstack((task, obs[2:]))
+	return res
 
 
 def collect_trajs(model, env, controller, params):
@@ -110,15 +108,15 @@ def collect_trajs(model, env, controller, params):
         for i in range(params["trajs"]):
             task = generate_traj(params["horizon"], params["traj_noise"], params["traj_v_range"], params["traj_theta_range"])
             tasks.append(task)
+            obs = env.reset()
+            x0s.append(obs)
             points = find_points(task, params)
             points_set.append(points)
-            deltas = model(task[:-2])*params["model_scale"]
+            deltas = model(model_input(task, obs, params))*params["model_scale"]
             task_adj = points + deltas
             spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times)
             traj = []
-            obs = env.reset()
-            x0s.append(obs)
-            for j in np.arange(0, params["horizon"], params["dt"]):
+            for j in np.arange(0, params["horizon"] + params["dt"], params["dt"]):
                 action, des_pos, act_pos = controller.next_action(j, spline, obs)
                 next_obs, reward, done, info = env.step(action)
                 traj.append((obs, action, reward, next_obs, done))
@@ -142,11 +140,11 @@ if __name__ == "__main__":
 
 	for i in range(10):
 
-		task = generate_traj(horizon, 0, [1, 5], [-1, 1], 2)
+		task = generate_traj(horizon, 0, [1, 5], [-1, 1])
 
 		find_points(task, {"horizon": horizon, "dt": 0.01, "points_per_sec": 2})
 
-		cs = Spline(task[:horizon], task[horizon:-2], xd_f=task[-2], yd_f=task[-1])
+		cs = Spline(task[:horizon], task[horizon:])
 
 		times = np.linspace(0, horizon, 40)
 		xs = []

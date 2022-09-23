@@ -20,17 +20,18 @@ def evaluate_once(model, params):
 		coeffs = params["dubins_dyn_coeffs"]
 
 		controller = Dubins_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3])
-		env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2])
-		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2])
+		env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2], v0=coeffs[3], phi0=coeffs[4])
+		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2], v0=coeffs[3], phi0=coeffs[4])
 	
 	output_times = np.linspace(0, params["horizon"], params["points_per_sec"]*params["horizon"] + 1)
 
 	task = generate_traj(params["horizon"], params["traj_noise"], params["traj_v_range"], params["traj_theta_range"])
 	task_points = find_points(task, params)
-	deltas = model(task[:-2])*params["model_scale"]
+	obs = env.reset()
+	deltas = model(model_input(task, obs, params))*params["model_scale"]
 	task_adj = task_points + deltas
 	spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times)
-	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:-2], xd_f=task[-2], yd_f=task[-1])
+	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:])
 
 	des_x = []
 	des_y = []
@@ -43,7 +44,6 @@ def evaluate_once(model, params):
 	dum_x = []
 	dum_y = []
 
-	obs = env.reset()
 	dum_obs = dum_env.reset()
 	smart_loss = 0
 	dum_loss = 0
@@ -72,16 +72,16 @@ def evaluate_once(model, params):
 
 	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss], task_points, task_adj.detach().numpy()
 
-def evaluate(path):
+def evaluate(path, model_name, save_fig):
 
 	trials = 3
 
-	fig, ax = plt.subplots(trials, 2)
+	fig, ax = plt.subplots(trials, 2, figsize=(12, 8))
 
 	smart_loss_avg = 0
 	dum_loss_avg = 0
 
-	model = torch.load(os.path.join(path, "model.pt"))
+	model = torch.load(os.path.join(path, model_name))
 	with open(os.path.join(path, 'params.json')) as json_file:
 		params = json.load(json_file)
 
@@ -109,12 +109,17 @@ def evaluate(path):
 	print("Avg Model Loss: ", smart_loss_avg)
 	print("Avg Naive Loss: ", dum_loss_avg)
 
-	plt.show()
+	if save_fig:
+		plt.savefig(os.path.join(path, "plot.png"))
+	else:
+		plt.show()
 
 
 if __name__=="__main__":
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--run_name', type=str, default="car_test1")
+	parser.add_argument('--run_name', '-n', type=str, default="car_test1")
+	parser.add_argument('--model_name', type=str, default="best_model.pt")
+	parser.add_argument('--save',  action='store_true')
 	args  = parser.parse_args()
 
-	evaluate(os.path.join("./logs", args.run_name))
+	evaluate(os.path.join("./logs", args.run_name), args.model_name, args.save_fig)
