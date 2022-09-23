@@ -14,7 +14,7 @@ class Dubins_env(gym.Env):
     """
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, total_time=10, dt=0.01, f_v=0.1, f_phi=0.05, scale=0.95, dev=torch.device("cpu")):
+    def __init__(self, total_time=10, dt=0.01, f_v=0.1, f_phi=0.05, scale=0.95):
 
         max_state = np.array([100, 100, 100, 100])
         max_input = np.array([10, 10])
@@ -29,7 +29,6 @@ class Dubins_env(gym.Env):
         self.f_v = f_v
         self.f_phi = f_phi
         self.scale = scale
-        self.dev=dev
 
     def seed(self,seed=None):
         self.np_random,seed=seeding.np_random(seed)
@@ -43,7 +42,7 @@ class Dubins_env(gym.Env):
         a = action[0]
         theta = action[1]
 
-        dot = torch.zeros(4, device=self.dev)
+        dot = torch.zeros(4)
 
         dot[0] = v*torch.cos(phi)
         dot[1] = v*torch.sin(phi)
@@ -66,7 +65,7 @@ class Dubins_env(gym.Env):
 
     def reset(self):
 
-        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float, device=self.dev)
+        self.state = torch.tensor([0, 0, 0, 0], dtype=torch.float)
         self.curr_step = 0
         self.done = False
 

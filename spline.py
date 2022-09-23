@@ -12,10 +12,10 @@ class Spline():
     """
     Cubic Spline Interpolation
     x_coord, y_coord positions at t >=1
-    xd, yd are the velocities
+    xd, yd are the velocities (initial and final)
     times by default assume a second between each of the coords
     """
-    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=0, yd_f=0, times=None, dev=torch.device("cpu")):
+    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=None, yd_f=None, times=None):
 
         if times is None:
             times = np.arange(len(x_coord) + 1)
@@ -25,17 +25,21 @@ class Spline():
         assert n == len(y_coord) + 1, "lengths don't match"
         assert n >= 2, "not long enough"
 
+        if xd_f==None:
+            xd_f = (x_coord[-1] - x_coord[-2]) / (times[-1] - times[-2])
+
+        if yd_f==None:
+            yd_f = (y_coord[-1] - y_coord[-2]) / (times[-1] - times[-2])
+
         self.times = times
         
         row_length = 4 * (n-1)
 
-        self.dev = dev
-
         self.A_x = []
         self.A_y = []
 
-        self.b_x = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
-        self.b_y = torch.zeros(4*(n-1), dtype=torch.double, device=self.dev)
+        self.b_x = torch.zeros(4*(n-1), dtype=torch.double)
+        self.b_y = torch.zeros(4*(n-1), dtype=torch.double)
 
         j=0 #index for b vectors
 
@@ -142,62 +146,11 @@ class Spline():
                 self.b_y[j+3] = 0
                 j += 4
 
-        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x)).to(self.dev)
-        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y)).to(self.dev)
+        self.A_x = torch.from_numpy(np.linalg.inv(self.A_x))
+        self.A_y = torch.from_numpy(np.linalg.inv(self.A_y))
 
         self.coeffs_x = torch.matmul(self.A_x, self.b_x)
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)
-
-    # def update(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=0, yd_f=0):
-    #     n = len(self.times)
-
-    #     self.A_x = self.A_x.detach().clone()
-    #     self.A_y = self.A_y.detach().clone()
-    #     self.b_x = self.b_x.detach().clone()
-    #     self.b_y = self.b_y.detach().clone()
-
-    #     j=0 #index for b vectors
-
-    #     for i in np.arange(n):
-    #         t = self.times[i]
-    #         if i == 0:
-    #             x = 0
-    #             y = 0
-    #         else: 
-    #             x = x_coord[i-1]
-    #             y = y_coord[i-1]
-
-    #         if i == 0:
-    #             self.b_x[j] = x
-    #             self.b_x[j+1] = -xd_0
-    #             self.b_y[j] = y
-    #             self.b_y[j+1] = -yd_0
-    #             j += 2
-
-    #         if i == n-1:
-    #             self.b_x[j] = x
-    #             self.b_x[j+1] = xd_f
-    #             self.b_y[j] = y
-    #             self.b_y[j+1] = yd_f
-    #             j += 2
-
-    #         if i != 0 and i != n-1:
-    #             #second derivative rows
-    #             self.b_x[j] = x
-    #             self.b_x[j+1] = x
-    #             self.b_x[j+2] = 0
-    #             self.b_x[j+3] = 0
-    #             self.b_y[j] = y
-    #             self.b_y[j+1] = y
-    #             self.b_y[j+2] = 0
-    #             self.b_y[j+3] = 0
-    #             j += 4
-
-    #     self.A_x = torch.from_numpy(np.linalg.inv(self.A_x)).to(self.dev)
-    #     self.A_y = torch.from_numpy(np.linalg.inv(self.A_y)).to(self.dev)
-
-    #     self.coeffs_x = torch.matmul(self.A_x, self.b_x)
-    #     self.coeffs_y = torch.matmul(self.A_y, self.b_y)
         
     def evaluate(self, t, der=0):
 
