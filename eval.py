@@ -11,6 +11,7 @@ import argparse
 import pdb
 import os
 import json
+matplotlib.rcParams.update({'font.size': 8})
 
 
 
@@ -67,7 +68,6 @@ def evaluate_once(model, params):
 		dum_x.append(dum_pos[0].detach().numpy())
 		dum_y.append(dum_pos[1].detach().numpy())
 
-
 		smart_loss += cost(obs, u, t, task, params).detach().numpy()
 		dum_loss += cost(dum_obs, dum_u, t, task, params).detach().numpy()
 
@@ -77,7 +77,7 @@ def evaluate(path, model_name, save_fig):
 
 	trials = 3
 
-	fig, ax = plt.subplots(trials, 2, figsize=(12, 8))
+	fig, ax = plt.subplots(trials, 2, sharex="row", sharey="row", figsize=(12, 9))
 
 	smart_loss_avg = 0
 	dum_loss_avg = 0
@@ -91,7 +91,7 @@ def evaluate(path, model_name, save_fig):
 		smart_loss_avg += loss[0] / trials
 		dum_loss_avg += loss[1] / trials
 
-		ax[i, 0].set_title("Trial {}: With Model (Loss: {})".format(i, loss[0]))
+		ax[i, 0].set_title("Trial {}: With Model (Loss: {})".format(i, np.round(loss[0], 2)))
 		ax[i, 0].plot(tar[0], tar[1], "b", label="task")
 		ax[i, 0].plot(des[0], des[1], label="model output")
 		ax[i, 0].plot(act[0], act[1], "orange", label="actual")
@@ -99,19 +99,16 @@ def evaluate(path, model_name, save_fig):
 		ax[i, 0].scatter(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], label="model nodes")
 		ax[i, 0].legend()
 
-		ax[i, 1].set_title("Trial {}: Naive (Loss: {})".format(i, loss[1]))
+		ax[i, 1].set_title("Trial {}: Naive (Loss: {})".format(i, np.round(loss[1], 2)))
 		ax[i, 1].plot(tar[0], tar[1], "b", label="task")
 		ax[i, 1].plot(dum[0], dum[1], "orange", label="actual")
 		ax[i, 1].legend()
-
-	for a in ax.flat:
-		a.label_outer()
 
 	print("Avg Model Loss: ", smart_loss_avg)
 	print("Avg Naive Loss: ", dum_loss_avg)
 
 	if save_fig:
-		plt.savefig(os.path.join(path, "plot.png"))
+		plt.savefig(os.path.join(path, "plot.png"),  bbox_inches='tight')
 	else:
 		plt.show()
 

@@ -143,14 +143,15 @@ for i in prog_bar:
             j += 1
 
     # Checkpoint
-    if log:
-        writer.add_scalar("Loss/Train", loss.item(), i)
+    loss_avg = loss.item() / (params["trajs"] * params["horizon"])
+    if log: 
+        writer.add_scalar("Loss/Train", loss_avg, i)
 
         if (i % params["save_every"] == 0) and (i != 0):
             torch.save(model, os.path.join(logdir, "model_{}.pt".format(i)))
-            if loss.item() < best_loss:
+            if loss_avg < best_loss:
                 torch.save(model, os.path.join(logdir, "best_model.pt"))
-                best_loss = loss.item()
+                best_loss = loss_avg
 
 
     # Backprop
@@ -158,13 +159,13 @@ for i in prog_bar:
     loss.backward(retain_graph=True)
     optimizer.step()
 
-    prog_bar.set_description("Loss: {}".format(loss.item()), refresh=True)
+    prog_bar.set_description("Loss: {}".format(loss_avg), refresh=True)
 
 
 ########################### FINAL LOGGING STUFF ###########################
 if log:
     writer.close()
-    if loss.item() < best_loss:
+    if loss_avg < best_loss:
         torch.save(model, os.path.join(logdir, "best_model.pt"))
     torch.save(model, os.path.join(logdir, "final_model.pt"))
     with open(os.path.join(logdir, "params.json"), "w+") as outfile:
