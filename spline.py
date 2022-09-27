@@ -15,7 +15,7 @@ class Spline():
     xd, yd are the velocities (initial and final)
     times by default assume a second between each of the coords
     """
-    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=None, yd_f=None, times=None):
+    def __init__(self, x_coord, y_coord, xd_0=0, yd_0=0, xd_f=None, yd_f=None, times=None, init_pos=torch.tensor([0, 0], dtype=torch.float)):
 
         if times is None:
             times = np.arange(len(x_coord) + 1)
@@ -40,6 +40,9 @@ class Spline():
 
         self.b_x = torch.zeros(4*(n-1), dtype=torch.double)
         self.b_y = torch.zeros(4*(n-1), dtype=torch.double)
+
+        self.init_x = init_pos[0]
+        self.init_y = init_pos[1]
 
         j=0 #index for b vectors
 
@@ -181,7 +184,7 @@ class Spline():
             res_x = 6*a_x*t + 2*b_x
             res_y = 6*a_y*t + 2*b_y
 
-        return res_x, res_y
+        return res_x + self.init_x, res_y + self.init_y
 
 
 if __name__=="__main__":

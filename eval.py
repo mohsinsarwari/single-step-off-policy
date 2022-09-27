@@ -11,11 +11,13 @@ import argparse
 import pdb
 import os
 import json
+from a1_controller import *
+from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 matplotlib.rcParams.update({'font.size': 8})
 
 
 
-def evaluate_once(model, params):
+def evaluate_once(model, params, v=None, theta=None):
 
 	if params["env"] == "car":
 		weights = params["dubins_controller_weights"]
@@ -24,16 +26,38 @@ def evaluate_once(model, params):
 		controller = Dubins_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3])
 		env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2], v0=coeffs[3], phi0=coeffs[4])
 		dum_env = Dubins_env(total_time=params["horizon"], dt=params["dt"], f_v=coeffs[0], f_phi=coeffs[1], scale=coeffs[2], v0=coeffs[3], phi0=coeffs[4])
+
+	elif params["env"] == "a1":
+		weights = params["a1_controller_weights"]
+
+		controller = A1_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3])
+		env = A1GymEnv(total_time=params["horizon"], dt=params["dt"])
+		dum_env = A1GymEnv(total_time=params["horizon"], dt=params["dt"])
 	
 	output_times = np.linspace(0, params["horizon"], params["points_per_sec"]*params["horizon"] + 1)
 
-	task = generate_traj(params["horizon"], params["traj_noise"], params["traj_v_range"], params["traj_theta_range"])
+	if v==None:
+		v = params["traj_v_range"]
+	else:
+		v = [v, v]
+
+	if theta==None:
+		theta = params["traj_theta_range"]
+	else:
+		theta = [theta, theta]
+
+	if params["env"] == "car":
+		obs = env.reset()
+	elif params["env"] == "a1":
+		obs = a1_warm_up(env, controller, params)
+
+	task = generate_traj(params["horizon"], params["traj_noise"], v, theta)
 	task_points = find_points(task, params)
-	obs = env.reset()
+	x0 = obs
+
 	deltas = model(model_input(task, obs, params))*params["model_scale"]
 	task_adj = task_points + deltas
-	spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times)
-	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:])
+	spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times, init_pos=obs)
 
 	des_x = []
 	des_y = []
@@ -46,7 +70,14 @@ def evaluate_once(model, params):
 	dum_x = []
 	dum_y = []
 
-	dum_obs = dum_env.reset()
+	if params["env"] == "car":
+		dum_obs = dum_env.reset()
+	elif params["env"] == "a1":
+		dum_obs = a1_warm_up(dum_env, controller, params)
+		
+	dum_x0 = dum_obs
+	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:], init_pos=dum_obs)
+
 	smart_loss = 0
 	dum_loss = 0
 	i = 0
@@ -68,14 +99,14 @@ def evaluate_once(model, params):
 		dum_x.append(dum_pos[0].detach().numpy())
 		dum_y.append(dum_pos[1].detach().numpy())
 
-		smart_loss += cost(obs, u, t, task, params).detach().numpy()
-		dum_loss += cost(dum_obs, dum_u, t, task, params).detach().numpy()
+		smart_loss += cost(obs, u, t, task, params, x0).detach().numpy()
+		dum_loss += cost(dum_obs, dum_u, t, task, params, dum_x0).detach().numpy()
 
-	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss], task_points, task_adj.detach().numpy()
+	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss], task_points, task_adj.detach(), x0, dum_x0
 
 def evaluate(path, model_name, save_fig):
 
-	trials = 3
+	trials = 2
 
 	fig, ax = plt.subplots(trials, 2, sharex="row", sharey="row", figsize=(12, 9))
 
@@ -86,8 +117,11 @@ def evaluate(path, model_name, save_fig):
 	with open(os.path.join(path, 'params.json')) as json_file:
 		params = json.load(json_file)
 
+	#eval_values = [[1.5, 1.5], [1, 0.5], [3.5, -1]]
+
 	for i in range(trials):
-		des, act, tar, dum, loss, task_points, task_adj = evaluate_once(model, params)
+		#v, theta = eval_values[i]
+		des, act, tar, dum, loss, task_points, task_adj, x0, dum_x0 = evaluate_once(model, params)#, v, theta)
 		smart_loss_avg += loss[0] / trials
 		dum_loss_avg += loss[1] / trials
 
@@ -95,8 +129,8 @@ def evaluate(path, model_name, save_fig):
 		ax[i, 0].plot(tar[0], tar[1], "b", label="task")
 		ax[i, 0].plot(des[0], des[1], label="model output")
 		ax[i, 0].plot(act[0], act[1], "orange", label="actual")
-		ax[i, 0].scatter(task_points[:params["horizon"]*params["points_per_sec"]], task_points[params["horizon"]*params["points_per_sec"]:], label="task nodes")
-		ax[i, 0].scatter(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], label="model nodes")
+		ax[i, 0].scatter(task_points[:params["horizon"]*params["points_per_sec"]] + x0[0], task_points[params["horizon"]*params["points_per_sec"]:] + x0[1], label="task nodes")
+		ax[i, 0].scatter(task_adj[:params["horizon"]*params["points_per_sec"]] + dum_x0[0], task_adj[params["horizon"]*params["points_per_sec"]:] + dum_x0[1], label="model nodes")
 		ax[i, 0].legend()
 
 		ax[i, 1].set_title("Trial {}: Naive (Loss: {})".format(i, np.round(loss[1], 2)))

@@ -9,7 +9,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torch
 import pdb
-#from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
+from helper import *
+from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
 class A1_controller:
     """
@@ -85,18 +86,45 @@ class A1_controller:
 
         return action, [x_d, y_d], [x_act, y_act]
 
+
+    def next_action_warm_up(self, v_des, phi_des, obs):
+
+        # x_d, y_d = spline.evaluate(curr_time, der=0)
+        # x_dot_d, y_dot_d = spline.evaluate(curr_time, der=1)
+
+        x_act = obs[0]
+        y_act = obs[1]
+        v_act = obs[2]
+        phi_act = obs[3]
+        w_act = obs[4]
+
+        a = self.k_v*(v_des - v_act)
+
+        w_tilde = self.k_phi*(phi_des - phi_act)
+
+        theta = self.k_w*(w_tilde - w_act)
+
+        action = [v_des, w_tilde, a, theta]
+
+        return action
+
+
 if __name__=="__main__":
-    
-    params = [1, 2, 0, 0.5]
-    total_time = 8
-    times = [0, 3, 8]
-    
-    env = A1_env(total_time=total_time, render=True)
-    controller = A1_controller(5, 5, 35, 5, 30)
 
-    cs = Spline(times, params[:2], params[2:])
+    horizon = 3
+    dt = 0.001
+    
+    env = A1GymEnv(total_time=horizon, dt=dt)
+    controller = A1_controller(4, 4, 20, 4, 20)
 
-    obs = env.reset()
+    params = generate_traj(horizon, 0, [0.3, 0.5], [-0.2, 0.2])
+
+    obs = a1_warm_up(env, controller, {"a1_warm_up_time": 1, "a1_warm_up_vel": [0.3, 0.6], "dt": dt})
+
+    print(obs)
+
+    cs = Spline(params[:horizon], params[horizon:], init_pos=obs)
+
     done = False
     curr_time = 0
 
@@ -117,6 +145,8 @@ if __name__=="__main__":
 
     plt.plot(des_x, des_y, label="desired")
     plt.plot(act_x, act_y, label="actual")
+    # plt.xlim([-3, 3])
+    # plt.ylim([-3, 3])
     plt.legend()
     plt.show()
 
