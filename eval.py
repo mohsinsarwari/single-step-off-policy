@@ -50,35 +50,37 @@ def evaluate_once(model, params, v=None, theta=None):
 
 	if params["env"] == "car":
 		obs = env.reset()
+		dum_obs = dum_env.reset()
 	elif params["env"] == "a1":
 		obs = a1_warm_up(env, controller, params)
+		dum_obs = a1_warm_up(dum_env, controller, params)
+
+	x0 = obs
+	dum_x0 = dum_obs
 
 	task = generate_traj(params["horizon"], params["traj_noise"], v, theta)
 	task_points = find_points(task, params)
-	x0 = obs
 
 	deltas = model(model_input(task, obs, params))*params["model_scale"]
 	task_adj = task_points + deltas
-	spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times, init_pos=obs)
+	spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times, init_pos=x0)
+	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:], init_pos=x0)
+	dum_task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:], init_pos=dum_obs)
 
 	des_x = []
 	des_y = []
 	act_x = []
 	act_y = []
+	act_phi = []
 	tar_x = []
 	tar_y = []
-
 	#naive follower
 	dum_x = []
 	dum_y = []
+	dum_phi = []
+	dum_tar_x = []
+	dum_tar_y = []
 
-	if params["env"] == "car":
-		dum_obs = dum_env.reset()
-	elif params["env"] == "a1":
-		dum_obs = a1_warm_up(dum_env, controller, params)
-		
-	dum_x0 = dum_obs
-	task_spline = Spline(task[:params["horizon"]], task[params["horizon"]:], init_pos=dum_obs)
 
 	smart_loss = 0
 	dum_loss = 0
@@ -86,27 +88,32 @@ def evaluate_once(model, params, v=None, theta=None):
 	for t in np.arange(0, params["horizon"] + params["dt"], params["dt"]):
 		if (i % params["controller_stride"] == 0):
 			u, des_pos, act_pos= controller.next_action(t, spline, obs)
-			dum_u, _, dum_pos = controller.next_action(t, task_spline, dum_obs)
-			des_x.append(des_pos[0].detach().numpy())
-			des_y.append(des_pos[1].detach().numpy())
+			dum_u, _, dum_pos = controller.next_action(t, dum_task_spline, dum_obs)
+			des_x.append(des_pos[0].detach().item())
+			des_y.append(des_pos[1].detach().item())
 			tar_pos_x, tar_pos_y = task_spline.evaluate(t, der=0)
+			dum_tar_pos_x, dum_tar_pos_y = dum_task_spline.evaluate(t, der=0)
 
 		obs, reward, done, info = env.step(u)
 		dum_obs, _, _, _ = dum_env.step(dum_u)
 
-		act_x.append(obs[0].detach().numpy())
-		act_y.append(obs[1].detach().numpy())
-		tar_x.append(tar_pos_x.detach().numpy())
-		tar_y.append(tar_pos_y.detach().numpy())
-		dum_x.append(dum_obs[0].detach().numpy())
-		dum_y.append(dum_obs[1].detach().numpy())
+		act_x.append(obs[0].detach().item())
+		act_y.append(obs[1].detach().item())
+		act_phi.append(obs[3].detach().item())
+		tar_x.append(tar_pos_x.detach().item())
+		tar_y.append(tar_pos_y.detach().item())
+		dum_x.append(dum_obs[0].detach().item())
+		dum_y.append(dum_obs[1].detach().item())
+		dum_phi.append(dum_obs[3].detach().item())
+		dum_tar_x.append(dum_tar_pos_x.detach().item())
+		dum_tar_y.append(dum_tar_pos_y.detach().item())
 
-		smart_loss += cost(obs, u, t, task, params, x0).detach().numpy()
-		dum_loss += cost(dum_obs, dum_u, t, task, params, dum_x0).detach().numpy()
+		smart_loss += cost(obs, u, t, task, params, x0).detach().item()
+		dum_loss += cost(dum_obs, dum_u, t, task, params, dum_x0).detach().item()
 
 		i += 1
 
-	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss], task_points, task_adj.detach(), x0, dum_x0
+	return [des_x, des_y], [act_x, act_y, act_phi], [tar_x, tar_y], [dum_x, dum_y, dum_phi], [dum_tar_x, dum_tar_y],[smart_loss, dum_loss], task_points, task_adj.detach(), x0, dum_x0
 
 def evaluate(path, model_name, save_fig):
 
@@ -121,11 +128,11 @@ def evaluate(path, model_name, save_fig):
 	with open(os.path.join(path, 'params.json')) as json_file:
 		params = json.load(json_file)
 
-	#eval_values = [[1.5, 1.5], [1, 0.5], [3.5, -1]]
+	eval_values = [[0.4, -0.3], [0.4, 0.3], [0.4, 0.01]]
 
 	for i in range(trials):
-		#v, theta = eval_values[i]
-		des, act, tar, dum, loss, task_points, task_adj, x0, dum_x0 = evaluate_once(model, params)#, v, theta)
+		v, theta = eval_values[i]
+		des, act, tar, dum, dum_tar, loss, task_points, task_adj, x0, dum_x0 = evaluate_once(model, params, v, theta)
 		smart_loss_avg += loss[0] / trials
 		dum_loss_avg += loss[1] / trials
 
@@ -133,13 +140,17 @@ def evaluate(path, model_name, save_fig):
 		ax[i, 0].plot(tar[0], tar[1], "b", label="task")
 		ax[i, 0].plot(des[0], des[1], label="model output")
 		ax[i, 0].plot(act[0], act[1], "orange", label="actual")
+		head_x, head_y, head_x_dir, head_y_dir = heading_arrays(act[0], act[1], act[2], stride=500)
+		ax[i, 0].quiver(head_x, head_y, head_x_dir, head_y_dir, label="heading")
 		ax[i, 0].scatter(task_points[:params["horizon"]*params["points_per_sec"]] + x0[0], task_points[params["horizon"]*params["points_per_sec"]:] + x0[1], label="task nodes")
-		ax[i, 0].scatter(task_adj[:params["horizon"]*params["points_per_sec"]] + dum_x0[0], task_adj[params["horizon"]*params["points_per_sec"]:] + dum_x0[1], label="model nodes")
+		ax[i, 0].scatter(task_adj[:params["horizon"]*params["points_per_sec"]] + x0[0], task_adj[params["horizon"]*params["points_per_sec"]:] + x0[1], label="model nodes")
 		ax[i, 0].legend()
 
 		ax[i, 1].set_title("Trial {}: Naive (Loss: {})".format(i, np.round(loss[1], 2)))
-		ax[i, 1].plot(tar[0], tar[1], "b", label="task")
+		ax[i, 1].plot(dum_tar[0], dum_tar[1], "b", label="task")
 		ax[i, 1].plot(dum[0], dum[1], "orange", label="actual")
+		dum_head_x, dum_head_y, dum_head_x_dir, dum_head_y_dir = heading_arrays(dum[0], dum[1], dum[2], stride=500)
+		ax[i, 1].quiver(dum_head_x, dum_head_y, dum_head_x_dir, dum_head_y_dir, label="heading")
 		ax[i, 1].legend()
 
 	print("Avg Model Loss: ", smart_loss_avg)

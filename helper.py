@@ -88,7 +88,12 @@ def cost(x, u, t, task, params, init_pos):
     spline = Spline(task[:params["horizon"]], task[params["horizon"]:], init_pos=init_pos)
     x_d, y_d = spline.evaluate(t, der=0)
 
-    return ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
+    ret = ((x[0] - x_d)**2 + (x[1] - y_d)**2) + (params["input_weight"] * (u[0]**2 + u[1]**2))
+
+    if t == params["horizon"]:
+        ret = ret*params["terminal_weight"]
+        
+    return ret
 
 def model_input(task, obs, params):
     if params["env"] == "car":

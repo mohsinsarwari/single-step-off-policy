@@ -124,14 +124,14 @@ if __name__=="__main__":
 
     horizon = 5
     dt = 0.002
-    controller_stride = 25
+    controller_stride = 1
     
     env = A1GymEnv(total_time=horizon, dt=dt)
     #env = A1_env(total_time=horizon, dt=dt)
                             #  x  y  v  phi w
     controller = A1_controller(3, 3, 5, 5, 15)
 
-    #controller = A1_controller(1, 1, 1, 1, 1)
+    #controller = A1_controller(20, 20, 20, 20, 20)
 
 
     params = generate_traj(horizon, 0, [0.4, 0.4], [0.4, 0.4])
@@ -164,7 +164,7 @@ if __name__=="__main__":
 
         act_x.append(obs[0])
         act_y.append(obs[1])
-        act_phi.append(obs[2])
+        act_phi.append(obs[3])
 
         i += 1
 
