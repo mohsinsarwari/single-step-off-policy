@@ -14,7 +14,7 @@ class A1_env(gym.Env):
     """
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, total_time = 10, dt= 0.01):
+    def __init__(self, total_time = 10, dt=0.01, v0=0, phi0=0):
 
         max_state = np.array([100, 100, 100, 100, 100])
         max_input = np.array([10, 10])
@@ -26,6 +26,8 @@ class A1_env(gym.Env):
         self.dt = dt
         self.curr_step = 0
         self.done = False
+        self.v0 = v0
+        self.phi0 = phi0
 
     def seed(self,seed=None):
         self.np_random,seed=seeding.np_random(seed)
@@ -37,8 +39,8 @@ class A1_env(gym.Env):
         v = state_copy[2]
         phi = state_copy[3]
         w = state_copy[4]
-        a = action[0]#.clone()
-        theta = action[1]#.clone()
+        a = action[2]#.clone()
+        theta = action[3]#.clone()
 
         dot = torch.zeros(5)
 
@@ -63,9 +65,10 @@ class A1_env(gym.Env):
         return self.curr_step*self.dt
 
     def reset(self):
+        v_init = np.random.uniform(0, self.v0)
+        phi_init = np.random.uniform(-self.phi0, self.phi0)
 
-        self.state = torch.tensor([0, 0, 0, 0, 0], dtype=torch.float)#, requires_grad=True)
-        #self.state.retain_grad()
+        self.state = torch.tensor([0, 0, v_init, phi_init, 0], dtype=torch.float)
         self.curr_step = 0
         self.done = False
 

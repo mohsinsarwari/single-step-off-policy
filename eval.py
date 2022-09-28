@@ -30,9 +30,11 @@ def evaluate_once(model, params, v=None, theta=None):
 	elif params["env"] == "a1":
 		weights = params["a1_controller_weights"]
 
-		controller = A1_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3])
+		controller = A1_controller(k_x=weights[0], k_y=weights[1], k_v=weights[2], k_phi=weights[3], k_w=weights[4])
 		env = A1GymEnv(total_time=params["horizon"], dt=params["dt"])
 		dum_env = A1GymEnv(total_time=params["horizon"], dt=params["dt"])
+		# env = A1_env(total_time=params["horizon"], dt=params["dt"])
+		# dum_env = A1_env(total_time=params["horizon"], dt=params["dt"])
 	
 	output_times = np.linspace(0, params["horizon"], params["points_per_sec"]*params["horizon"] + 1)
 
@@ -81,26 +83,28 @@ def evaluate_once(model, params, v=None, theta=None):
 	smart_loss = 0
 	dum_loss = 0
 	i = 0
-	for t in np.arange(0, params["horizon"], params["dt"]):
-		u, des_pos, act_pos= controller.next_action(t, spline, obs)
-		dum_u, _, dum_pos = controller.next_action(t, task_spline, dum_obs)
+	for t in np.arange(0, params["horizon"] + params["dt"], params["dt"]):
+		if (i % params["controller_stride"] == 0):
+			u, des_pos, act_pos= controller.next_action(t, spline, obs)
+			dum_u, _, dum_pos = controller.next_action(t, task_spline, dum_obs)
+			des_x.append(des_pos[0].detach().numpy())
+			des_y.append(des_pos[1].detach().numpy())
+			tar_pos_x, tar_pos_y = task_spline.evaluate(t, der=0)
 
 		obs, reward, done, info = env.step(u)
 		dum_obs, _, _, _ = dum_env.step(dum_u)
 
-		tar_pos_x, tar_pos_y = task_spline.evaluate(t, der=0)
-
-		des_x.append(des_pos[0].detach().numpy())
-		des_y.append(des_pos[1].detach().numpy())
-		act_x.append(act_pos[0].detach().numpy())
-		act_y.append(act_pos[1].detach().numpy())
+		act_x.append(obs[0].detach().numpy())
+		act_y.append(obs[1].detach().numpy())
 		tar_x.append(tar_pos_x.detach().numpy())
 		tar_y.append(tar_pos_y.detach().numpy())
-		dum_x.append(dum_pos[0].detach().numpy())
-		dum_y.append(dum_pos[1].detach().numpy())
+		dum_x.append(dum_obs[0].detach().numpy())
+		dum_y.append(dum_obs[1].detach().numpy())
 
 		smart_loss += cost(obs, u, t, task, params, x0).detach().numpy()
 		dum_loss += cost(dum_obs, dum_u, t, task, params, dum_x0).detach().numpy()
+
+		i += 1
 
 	return [des_x, des_y], [act_x, act_y], [tar_x, tar_y], [dum_x, dum_y], [smart_loss, dum_loss], task_points, task_adj.detach(), x0, dum_x0
 

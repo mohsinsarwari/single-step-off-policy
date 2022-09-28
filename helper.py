@@ -110,8 +110,11 @@ def a1_warm_up(env, controller, params):
     print("--------------WARMED UP----------------")
     return obs
 
+def heading_arrays(xs, ys, phis, stride=5):
+    return xs[::stride], ys[::stride], [np.cos(phi) for phi in phis[::stride]], [np.sin(phi) for phi in phis[::stride]] 
 
-def collect_trajs(model, env, controller, params):
+
+def collect_trajs(model, env, controller, params, i):
 
     output_times = np.linspace(0, params["horizon"], params["points_per_sec"]*params["horizon"] + 1)
 
@@ -130,15 +133,18 @@ def collect_trajs(model, env, controller, params):
             x0s.append(obs)
             points = find_points(task, params)
             points_set.append(points)
-            deltas = model(model_input(task, obs, params))*params["model_scale"]
+            deltas = model(model_input(task, obs, params))*params["model_scale"]*(min(1, 2*(i+1)/params["iterations"]))
             task_adj = points + deltas
             spline = Spline(task_adj[:params["horizon"]*params["points_per_sec"]], task_adj[params["horizon"]*params["points_per_sec"]:], times=output_times, init_pos=obs)
             traj = []
+            k = 0
             for j in np.arange(0, params["horizon"] + params["dt"], params["dt"]):
-                action, des_pos, act_pos = controller.next_action(j, spline, obs)
+                if (k % params["controller_stride"] == 0):
+                    action, des_pos, act_pos = controller.next_action(j, spline, obs)
                 next_obs, reward, done, info = env.step(action)
                 traj.append((obs, action, reward, next_obs, done))
                 obs = next_obs
+                k += 1
             trajs.append(traj)
 
         # Make time-varying dynamics

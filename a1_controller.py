@@ -34,6 +34,9 @@ class A1_controller:
         #anglular speed gain 
         self.k_w = k_w
 
+        # self.phi_hat = 0
+        # self.alpha = alpha
+        # self.count = 0
     """
     @params
         curr_time: time at which to evaluate controls
@@ -75,6 +78,12 @@ class A1_controller:
 
         if torch.abs(phi_des - phi_act) > torch.abs(phi_des - 2*np.pi - phi_act):
             phi_des -= 2*np.pi
+
+        # if True or (curr_time == 0):
+        #     self.phi_hat = phi_des
+        # else:
+        #     if (self.count % 100 == 0):
+        #         self.phi_hat = (self.alpha*self.phi_hat + phi_des) / (1 + self.alpha)
             
         a = self.k_v*(v_des - v_act)
 
@@ -84,7 +93,9 @@ class A1_controller:
 
         action = [v_des, w_tilde, a, theta]
 
-        return action, [x_d, y_d], [x_act, y_act]
+        # self.count += 1
+
+        return action, [x_d, y_d], [x_act, y_act, phi_act]
 
 
     def next_action_warm_up(self, v_des, phi_des, obs):
@@ -111,17 +122,25 @@ class A1_controller:
 
 if __name__=="__main__":
 
-    horizon = 3
-    dt = 0.001
+    horizon = 5
+    dt = 0.002
+    controller_stride = 25
     
     env = A1GymEnv(total_time=horizon, dt=dt)
-    controller = A1_controller(4, 4, 20, 4, 20)
+    #env = A1_env(total_time=horizon, dt=dt)
+                            #  x  y  v  phi w
+    controller = A1_controller(3, 3, 5, 5, 15)
 
-    params = generate_traj(horizon, 0, [0.3, 0.5], [-0.2, 0.2])
+    #controller = A1_controller(1, 1, 1, 1, 1)
 
-    obs = a1_warm_up(env, controller, {"a1_warm_up_time": 1, "a1_warm_up_vel": [0.3, 0.6], "dt": dt})
 
-    print(obs)
+    params = generate_traj(horizon, 0, [0.4, 0.4], [0.4, 0.4])
+
+    #params = generate_traj(horizon, 0, [0.4, 0.4], [0.2, 0.2])
+
+    #obs = env.reset()
+
+    obs = a1_warm_up(env, controller, {"a1_warm_up_time": 1, "a1_warm_up_vel": [0.4, 0.4], "dt": dt})
 
     cs = Spline(params[:horizon], params[horizon:], init_pos=obs)
 
@@ -132,22 +151,37 @@ if __name__=="__main__":
     des_y = []
     act_x = []
     act_y = []
-
+    act_phi = []
+    i = 0
     while not done:
-        action, des_pos, act_pos = controller.next_action(curr_time, cs, obs)
+        if (i % controller_stride == 0):
+            action, des_pos, act_pos = controller.next_action(curr_time, cs, obs)
+            des_x.append(des_pos[0])
+            des_y.append(des_pos[1])
+
         obs, _, done, info = env.step(action)
         curr_time = info["curr_time"]
 
-        des_x.append(des_pos[0])
-        des_y.append(des_pos[1])
-        act_x.append(act_pos[0])
-        act_y.append(act_pos[1])
+        act_x.append(obs[0])
+        act_y.append(obs[1])
+        act_phi.append(obs[2])
 
-    plt.plot(des_x, des_y, label="desired")
-    plt.plot(act_x, act_y, label="actual")
+        i += 1
+
+    head_x, head_y, head_x_dir, head_y_dir = heading_arrays(act_x, act_y, act_phi, stride=500)
+
+    fig, ax = plt.subplots(1, 2)
+
+    ax[0].plot(des_x, des_y, label="desired")
+    ax[0].plot(act_x, act_y, label="actual")
+    ax[0].quiver(head_x, head_y, head_x_dir, head_y_dir, label="heading")
     # plt.xlim([-3, 3])
     # plt.ylim([-3, 3])
-    plt.legend()
+    ax[0].legend()
+
+    #ax[1].plot(np.subtract(des_x, act_x)**2 + np.subtract(des_y, act_y)**2, label="tracking_error")
+    ax[1].plot(act_phi, label="phi")
+    ax[1].legend()
     plt.show()
 
 
