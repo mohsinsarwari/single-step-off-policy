@@ -175,8 +175,8 @@ class Spline():
         d_y = self.coeffs_y[4*i + 3]
 
         if der==0:
-            res_x = a_x*t**3 + b_x*t**2 + c_x*t + d_x
-            res_y = a_y*t**3 + b_y*t**2 + c_y*t + d_y
+            res_x = a_x*t**3 + b_x*t**2 + c_x*t + d_x + self.init_x
+            res_y = a_y*t**3 + b_y*t**2 + c_y*t + d_y + self.init_y
         elif der==1:
             res_x = 3*a_x*t**2 + 2*b_x*t + c_x
             res_y = 3*a_y*t**2 + 2*b_y*t + c_y
@@ -184,7 +184,7 @@ class Spline():
             res_x = 6*a_x*t + 2*b_x
             res_y = 6*a_y*t + 2*b_y
 
-        return res_x + self.init_x, res_y + self.init_y
+        return res_x, res_y
 
 
 if __name__=="__main__":

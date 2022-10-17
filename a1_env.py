@@ -6,6 +6,7 @@ from os import path
 import torch
 import pdb
 
+from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 
 class A1_env(gym.Env):
     """
@@ -14,76 +15,36 @@ class A1_env(gym.Env):
     """
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, total_time = 10, dt=0.01, v0=0, phi0=0):
+    def __init__(self, controller, params, render=False):
 
-        max_state = np.array([100, 100, 100, 100, 100])
-        max_input = np.array([10, 10])
-        self.action_space = spaces.Box(low=-max_input, high=max_input, shape=(2,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-max_state, high=max_state, shape=(5,), dtype=np.float32)
-        
-        self.num_steps = total_time // dt
-        self.total_time = total_time
-        self.dt = dt
-        self.curr_step = 0
-        self.done = False
-        self.v0 = v0
-        self.phi0 = phi0
+        self.env = A1GymEnv(total_time=params["task_time"], dt=params["dt"], render=render)
+        self.controller = controller
+        self.params = params
+
 
     def seed(self,seed=None):
         self.np_random,seed=seeding.np_random(seed)
 
     def step(self, action):
-        state_copy = self.state.clone()
-        x = state_copy[0]
-        y = state_copy[1]
-        v = state_copy[2]
-        phi = state_copy[3]
-        w = state_copy[4]
-        a = action[2]#.clone()
-        theta = action[3]#.clone()
+        obs, cost, done, info = self.env.step(action)
 
-        dot = torch.zeros(5)
-
-        dot[0] = v*torch.cos(phi)
-        dot[1] = v*torch.sin(phi)
-        dot[2] = a
-        dot[3] = w
-        dot[4] = theta
-
-        self.state = state_copy + dot*self.dt
-
-        costs = 0
-
-        self.curr_step += 1
-
-        if self.curr_step == self.num_steps:
-          self.done=True
-
-        return self._get_obs(), -costs, self.done, {"curr_time": self.curr_step*self.dt}
+        return obs, cost, done, info
 
     def time(self):
         return self.curr_step*self.dt
 
     def reset(self):
-        v_init = np.random.uniform(0, self.v0)
-        phi_init = np.random.uniform(-self.phi0, self.phi0)
-
-        self.state = torch.tensor([0, 0, v_init, phi_init, 0], dtype=torch.float)
-        self.curr_step = 0
-        self.done = False
-
-        return self._get_obs()
-
-    def _get_obs(self):
-        return self.state
+        obs = self.env.reset()
+        self.env.warm_up = True
+        v_des = torch.tensor(np.random.uniform(self.params["a1_warm_up_info"][0], self.params["a1_warm_up_info"][1]), dtype=torch.float)
+        phi_des = torch.tensor(0, dtype=torch.float)
+        for _ in np.arange(0, self.params["a1_warm_up_info"][2], self.params["dt"]):
+            action = self.controller.next_action_warm_up(v_des, phi_des, obs)
+            obs, reward, done, info = self.env.step(action)
+        self.env.init_time = self.env.robot.GetTimeSinceReset()
+        self.env.warm_up = False
+        print("--------------WARMED UP----------------")
+        return obs
 
     def render(self):
         return None
-
-    def close(self):
-        if self.viewer:
-            self.viewer.close()
-            self.viewer = None
-
-    def angle_normalize(self, x):
-        return abs(((x + np.pi) % (2 * np.pi)) - np.pi)
