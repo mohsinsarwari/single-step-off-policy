@@ -81,11 +81,11 @@ class Dubins_controller:
 		return action, [x_d, y_d], [x_act, y_act, phi_act]
 
 if __name__=="__main__":
-	params = {"task_time": 4, "dubins_dyn_coeffs": [0.5, 0.25, 0.95, 0, 0], "dubins_controller_weights": [3, 3, 3, 3], "dt": 0.01}
+	params = {"task_time": 10, "dubins_dyn_coeffs": [0.5, 0.25, 0.95, 0, 0], "dubins_controller_weights": [3, 3, 3, 3], "dt": 0.01}
 	env = Dubins_env(params)
 	controller = Dubins_controller(params)
 
-	task = figure_eight(radius=4, time=params["task_time"])
+	task = figure_eight(radius=5, time=params["task_time"])
 	#task = random(time=params["task_time"])
 
 	obs = env.reset()

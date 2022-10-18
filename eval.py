@@ -22,8 +22,8 @@ def evaluate(path, model_name, save_fig):
 	with open(os.path.join(path, 'params.json')) as json_file:
 		params = json.load(json_file)
 
-	#task = figure_eight(radius=params["task_radius"], time=params["task_time"])
-	task = random(params["task_time"])
+	task = figure_eight(radius=params["task_radius"], time=params["task_time"])
+	#task = random(params["task_time"])
 
 	if params["env"] == "car":
 		f_nominal = nominals["car"]
@@ -54,6 +54,8 @@ def evaluate(path, model_name, save_fig):
 	act_ys = []
 	model_xs = []
 	model_ys = []
+	traj_xs = []
+	traj_ys = []
 
 	rollout_len = int(params["model_dt"] / params["dt"])
 	num_rollout = int(params["task_time"] / params["model_dt"])
@@ -70,6 +72,8 @@ def evaluate(path, model_name, save_fig):
 
 		model_xs.append(des_pos[0].item())
 		model_ys.append(des_pos[1].item())
+		traj_xs.append(x)
+		traj_ys.append(y)
 
 		for i in range(rollout_len):
 			x, y = task.evaluate(t0 + i*params["dt"], der=0)
@@ -83,6 +87,7 @@ def evaluate(path, model_name, save_fig):
 	plt.plot(tar_xs, tar_ys, "b", label="task")
 	plt.plot(act_xs, act_ys, "orange", label="actual")
 	plt.scatter(model_xs, model_ys, label="model_out")
+	plt.scatter(traj_xs, traj_ys, label="original_points")
 	#head_x, head_y, head_x_dir, head_y_dir = heading_arrays(act[0], act[1], act[2], stride=100)
 	#model_ax[i].quiver(head_x, head_y, head_x_dir, head_y_dir, label="heading")
 	#model_ax[i].scatter(task_points[:params["horizon"]*params["points_per_sec"]] + x0[0], task_points[params["horizon"]*params["points_per_sec"]:] + x0[1], label="task nodes")

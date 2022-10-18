@@ -35,11 +35,11 @@ parser.add_argument('--loss_stride', type=float, default=1) # number of simulati
 parser.add_argument('--terminal_weight', type=float, default=1)
 
 
-parser.add_argument('--task_radius', type=float, default=4) #figure eight radius
-parser.add_argument('--task_time', type=float, default=4) #time (in seconds) to complete figure eight
-parser.add_argument('--model_dt', type=float, default=0.5) #time length between model calls
+parser.add_argument('--task_radius', type=float, default=5) #figure eight radius
+parser.add_argument('--task_time', type=float, default=10) #time (in seconds) to complete figure eight
+parser.add_argument('--model_dt', type=float, default=0.25) #time length between model calls
 parser.add_argument('--dt', type=float, default=0.01)
-parser.add_argument('--num_model_calls_per_rollout', type=float, default=2)
+parser.add_argument('--num_model_calls_per_rollout', type=float, default=3)
 
 parser.add_argument('--dubins_controller_weights', type=list, default=[3, 3, 3, 3])
 parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95, 0, 0]) #friction on v, phi, scale on inputs, init v between [0, v0] and phi between [-phi0, phi0]
