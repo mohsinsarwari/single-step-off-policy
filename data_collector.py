@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torch
 import pdb
+import itertools
 
 from helper import *
 
@@ -40,7 +41,7 @@ class DataCollector:
 
 	def __next__(self):
 		if self.index < len(self.x0s):
-			return self.rollout_full()
+			return self.rollout_fixed()
 
 		raise StopIteration
 
@@ -58,27 +59,28 @@ class DataCollector:
 
 
 	def rollout_single(self):
-		dyn_cuttoff = self.index * int(self.params["model_dt"] / self.params["dt"])
-		dyn_cuttoff_1 = (self.index+1) * int(self.params["model_dt"] / self.params["dt"])
 		x0 = self.x0s[self.index]
 		t0 = self.t0s[self.index]
 		action = self.actions[self.index]
-		dyn_tuples = list(zip(self.all_states[dyn_cuttoff:dyn_cuttoff_1], self.us[dyn_cuttoff:dyn_cuttoff_1], self.all_states[dyn_cuttoff+1:dyn_cuttoff_1+1]))
-
+		dyn_tuples = self.states_action_tuples[self.index]
 		self.index += 1
 
-		return (x0, t0, action, dyn_tuples)
+		return ([x0], [t0], [action], [dyn_tuples])
 
 	def rollout_fixed(self):
-		dyn_cuttoff = self.index * int(self.params["model_dt"] / self.params["dt"])
-		x0 = self.x0s[self.index]
-		t0 = self.t0s[self.index]
-		action = self.actions[self.index]
-		dyn_tuples = list(zip(self.all_states[dyn_cuttoff:-1], self.us[dyn_cuttoff:], self.all_states[dyn_cuttoff+1:]))
+		num = self.params["num_model_calls_per_rollout"]
+
+		if self.index + num > len(self.x0s):
+			raise StopIteration
+
+		r_x0s = self.x0s[self.index:self.index+num]
+		r_t0s = self.t0s[self.index:self.index+num]
+		r_actions = self.actions[self.index:self.index+num]
+		dyn_tuples_list = self.states_action_tuples[self.index:self.index+num]
 
 		self.index += 1
 
-		return (x0, t0, action, dyn_tuples)
+		return (r_x0s, r_t0s, r_actions, dyn_tuples_list)
 		
 	def collect_data(self, model):
 		self.index = 0 # for iteration
@@ -87,15 +89,15 @@ class DataCollector:
 		self.actions = []
 
 		self.us = []
-		self.all_states = []
+		self.states_action_tuples = []
 
 		with torch.no_grad():
 			rollout_len = int(self.params["model_dt"] / self.params["dt"])
 			num_rollout = int(self.params["task_time"] / self.params["model_dt"])
 			obs = self.env.reset()
-			self.all_states.append(obs)
 
 			for j in range(num_rollout):
+				self.states_action_tuples.append([])
 				t0 = j * self.params["model_dt"]
 				model_act = model(model_input(obs, t0)).detach() * self.params["model_scale"]
 				self.x0s.append(obs)
@@ -110,6 +112,7 @@ class DataCollector:
 				for i in range(rollout_len):
 					u, des_pos, act_pos = self.controller.next_action(des_pos, des_vel, obs)
 					self.us.append(u)
-					obs, _, _, _ = self.env.step(u)
-					self.all_states.append(obs)
+					next_obs, _, _, _ = self.env.step(u)
+					self.states_action_tuples[j].append((obs, u, next_obs))
+					obs = next_obs
 

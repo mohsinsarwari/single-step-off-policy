@@ -28,17 +28,18 @@ from data_collector import DataCollector
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_name', '-n', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--iterations', type=int, default=500)
+parser.add_argument('--iterations', type=int, default=200)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--input_weight', type=float, default=0) #weight on input in cost function
 parser.add_argument('--loss_stride', type=float, default=1) # number of simulation steps before adding cost to loss again
 parser.add_argument('--terminal_weight', type=float, default=1)
 
 
-parser.add_argument('--task_radius', type=float, default=3) #figure eight radius
-parser.add_argument('--task_time', type=float, default=2) #time (in seconds) to complete figure eight
+parser.add_argument('--task_radius', type=float, default=4) #figure eight radius
+parser.add_argument('--task_time', type=float, default=4) #time (in seconds) to complete figure eight
 parser.add_argument('--model_dt', type=float, default=0.5) #time length between model calls
 parser.add_argument('--dt', type=float, default=0.01)
+parser.add_argument('--num_model_calls_per_rollout', type=float, default=2)
 
 parser.add_argument('--dubins_controller_weights', type=list, default=[3, 3, 3, 3])
 parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95, 0, 0]) #friction on v, phi, scale on inputs, init v between [0, v0] and phi between [-phi0, phi0]
@@ -78,9 +79,9 @@ if log:
 ################### ENVIRONMENT AND TASK SELECTION ######################
 ## Nominal Functions and Cost defined in helper.py
 
-#task = figure_eight(radius=params["task_radius"], time=params["task_time"])
+task = figure_eight(radius=params["task_radius"], time=params["task_time"])
 
-task = random(params["task_time"])
+#task = random(params["task_time"])
 
 if params["env"] == "car":
 	f_nominal = nominals["car"]
@@ -120,39 +121,44 @@ for i in prog_bar:
 
 	optimizer.zero_grad() 
 
-
-	######################## DATA COLLECTION (see data_collector.py) ######################
+	################# DATA COLLECTION (see data_collector.py) ################
 	collector.collect_data(model)
 
 	######################## LOSS FUNCTION CONSTRUCTION ######################
 	loss = 0
 	for rollout in collector:
-		#pdb.set_trace()
-		x0 = rollout[0]
-		t0 = rollout[1]
-		action = rollout[2]
-		dyn = rollout[3]
+		x0s = rollout[0]
+		t0s = rollout[1]
+		actions = rollout[2]
+		dyns = rollout[3]
 
-		def f(x,u,k):
-			return f_nominal(x,u,params["dt"]) - f_nominal(dyn[k][0],dyn[k][1],params["dt"]) + dyn[k][2]
-	
-		obs = x0
+		for j in range(len(x0s)):
 
-		model_act = model(model_input(obs, t0)) * params["model_scale"]
+			x0 = x0s[j]
+			t0 = t0s[j]
+			action = actions[j]
+			dyn = dyns[j]
 
-		x, y = task.evaluate(t0 + params["model_dt"], der=0)
-		x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)
-		des_pos = [x + model_act[0], y + model_act[1]]
-		des_vel = [x_dot + model_act[2], y_dot + model_act[3]]
+			def f(x,u,k):
+				return f_nominal(x,u,params["dt"]) - f_nominal(dyn[k][0],dyn[k][1],params["dt"]) + dyn[k][2]
+		
+			obs = x0
 
-		for k in range(len(dyn)):
-			t = t0 + k * params["dt"]
-			u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
+			model_act = model(model_input(obs, t0)) * params["model_scale"]
 
-			if (k % params["loss_stride"] == 0):
-				loss += cost(obs, u, t, task, params)
-				
-			obs = f(obs, u, k)
+			x, y = task.evaluate(t0 + params["model_dt"], der=0)
+			x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)
+			des_pos = [x + model_act[0], y + model_act[1]]
+			des_vel = [x_dot + model_act[2], y_dot + model_act[3]]
+
+			for k in range(int(params["model_dt"] / params["dt"])):
+				t = t0 + k * params["dt"]
+				u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
+
+				if (k % params["loss_stride"] == 0):
+					loss += cost(obs, u, t, task, params)
+					
+				obs = f(obs, u, k)
 
 	# Checkpoint
 	loss_avg = loss.item()
