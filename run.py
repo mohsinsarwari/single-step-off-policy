@@ -28,8 +28,8 @@ from data_collector import DataCollector
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_name', '-n', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--iterations', type=int, default=200)
-parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--iterations', type=int, default=300)
+parser.add_argument('--lr', type=float, default=5e-4)
 parser.add_argument('--input_weight', type=float, default=0) #weight on input in cost function
 parser.add_argument('--loss_stride', type=float, default=1) # number of simulation steps before adding cost to loss again
 parser.add_argument('--terminal_weight', type=float, default=1)
@@ -39,7 +39,7 @@ parser.add_argument('--task_radius', type=float, default=5) #figure eight radius
 parser.add_argument('--task_time', type=float, default=10) #time (in seconds) to complete figure eight
 parser.add_argument('--model_dt', type=float, default=0.25) #time length between model calls
 parser.add_argument('--dt', type=float, default=0.01)
-parser.add_argument('--num_model_calls_per_rollout', type=float, default=3)
+parser.add_argument('--num_model_calls_per_rollout', type=float, default=5)
 
 parser.add_argument('--dubins_controller_weights', type=list, default=[3, 3, 3, 3])
 parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95, 0, 0]) #friction on v, phi, scale on inputs, init v between [0, v0] and phi between [-phi0, phi0]
@@ -47,7 +47,7 @@ parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95, 
 parser.add_argument('--a1_controller_weights', type=list, default=[3, 3, 5, 5, 15]) #x, y, v, phi, w, alpha
 parser.add_argument('--a1_warm_up_info', type=list, default=[0.3, 0.5, 2])
 
-parser.add_argument('--width', type=float, default=32) #width of hidden layers (x2)
+parser.add_argument('--width', type=float, default=64) #width of hidden layers (x2)
 parser.add_argument('--model_scale', type=float, default=1)
 parser.add_argument('--save_every', type=float, default=50) #save model every # iterations
 parser.add_argument('--overwrite', '-o', action="store_true") #save model every # iterations
@@ -89,7 +89,7 @@ if params["env"] == "car":
 	controller = Dubins_controller(params)
 	env = Dubins_env(params)
 
-	num_input_states = 5 # Four states + time
+	num_input_states = 6 # Four states + 2 time states
 
 elif params["env"] == "a1":
 	f_nominal = nominals["a1"]
@@ -97,7 +97,7 @@ elif params["env"] == "a1":
 	controller = A1_controller(params)
 	env = A1GymEnv(controller, params) #pass in controller for warm up on reset
 
-	num_input_states = 6 # Five states + time
+	num_input_states = 7 # Five states + 2 time states
 
 else:
 	raise NotImplementedError("Environment not implemented")
@@ -144,7 +144,7 @@ for i in prog_bar:
 		
 			obs = x0
 
-			model_act = model(model_input(obs, t0)) * params["model_scale"]
+			model_act = model(model_input(obs, t0, params["task_time"])) * params["model_scale"]
 
 			x, y = task.evaluate(t0 + params["model_dt"], der=0)
 			x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)

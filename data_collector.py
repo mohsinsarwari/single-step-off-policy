@@ -99,7 +99,7 @@ class DataCollector:
 			for j in range(num_rollout):
 				self.states_action_tuples.append([])
 				t0 = j * self.params["model_dt"]
-				model_act = model(model_input(obs, t0)).detach() * self.params["model_scale"]
+				model_act = model(model_input(obs, t0, self.params["task_time"])).detach() * self.params["model_scale"]
 				self.x0s.append(obs)
 				self.t0s.append(t0)
 				self.actions.append(model_act)

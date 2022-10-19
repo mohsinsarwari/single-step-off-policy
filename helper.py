@@ -48,8 +48,8 @@ def cost(obs, u, t, task, params):
 		
 	return ret
 
-def model_input(obs, t):
-	res = torch.hstack((obs, torch.tensor(t)))
+def model_input(obs, t, task_time):
+	res = torch.hstack((obs, torch.tensor([np.cos(2*np.pi*t/task_time), np.sin(2*np.pi*t/task_time)], dtype=torch.float)))
 	return res
 
 def a1_warm_up(env, controller, params):
