@@ -23,23 +23,24 @@ from task_generator import *
 from data_collector import DataCollector
 
 
-
 ######################### PARAMETER STUFF ######################
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_name', '-n', type=str, default=None)
 parser.add_argument('--env', type=str, default="car")
-parser.add_argument('--iterations', type=int, default=300)
-parser.add_argument('--lr', type=float, default=5e-4)
+parser.add_argument('--iterations', type=int, default=50)
+parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--input_weight', type=float, default=0) #weight on input in cost function
-parser.add_argument('--loss_stride', type=float, default=1) # number of simulation steps before adding cost to loss again
+parser.add_argument('--loss_stride', type=float, default=5) # number of simulation steps before adding cost to loss again
 parser.add_argument('--terminal_weight', type=float, default=1)
 
 
-parser.add_argument('--task_radius', type=float, default=5) #figure eight radius
+parser.add_argument('--task_radius', type=float, default=3) #figure eight radius
 parser.add_argument('--task_time', type=float, default=10) #time (in seconds) to complete figure eight
-parser.add_argument('--model_dt', type=float, default=0.25) #time length between model calls
+parser.add_argument('--model_dt', type=float, default=0.5) #time length between model calls
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--num_model_calls_per_rollout', type=float, default=5)
+parser.add_argument('--buffer_length', type=float, default=200)
+parser.add_argument('--sim_score_scale', type=float, default=100)
 
 parser.add_argument('--dubins_controller_weights', type=list, default=[3, 3, 3, 3])
 parser.add_argument('--dubins_dyn_coeffs', type=list, default=[0.5, 0.25, 0.95, 0, 0]) #friction on v, phi, scale on inputs, init v between [0, v0] and phi between [-phi0, phi0]
@@ -80,8 +81,6 @@ if log:
 ## Nominal Functions and Cost defined in helper.py
 
 task = figure_eight(radius=params["task_radius"], time=params["task_time"])
-
-#task = random(params["task_time"])
 
 if params["env"] == "car":
 	f_nominal = nominals["car"]
@@ -125,8 +124,10 @@ for i in prog_bar:
 	collector.collect_data(model)
 
 	######################## LOSS FUNCTION CONSTRUCTION ######################
+	rollout = collector.get_next()
+
 	loss = 0
-	for rollout in collector:
+	while rollout: 
 		x0s = rollout[0]
 		t0s = rollout[1]
 		actions = rollout[2]
@@ -136,7 +137,6 @@ for i in prog_bar:
 
 			x0 = x0s[j]
 			t0 = t0s[j]
-			action = actions[j]
 			dyn = dyns[j]
 
 			def f(x,u,k):
@@ -155,10 +155,51 @@ for i in prog_bar:
 				t = t0 + k * params["dt"]
 				u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
 
-				if (k % params["loss_stride"] == 0):
-					loss += cost(obs, u, t, task, params)
+				# if (k % params["loss_stride"] == 0):
 					
 				obs = f(obs, u, k)
+
+			loss += cost(obs, u, t, task, params)
+
+		rollout = collector.get_next()
+
+
+	# old_rollout = collector.get_old_next()
+	# while old_rollout:
+
+	# 	x0 = old_rollout[0]
+	# 	t0 = old_rollout[1]
+	# 	action = old_rollout[2]
+	# 	dyn = old_rollout[3]
+
+	# 	def f(x,u,k):
+	# 		return f_nominal(x,u,params["dt"]) - f_nominal(dyn[k][0],dyn[k][1],params["dt"]) + dyn[k][2]
+	
+	# 	obs = x0
+
+	# 	model_act = model(model_input(obs, t0, params["task_time"])) * params["model_scale"]
+
+	# 	sim_score = torch.exp(-params["sim_score_scale"] * torch.norm(model_act - action))
+
+	# 	x, y = task.evaluate(t0 + params["model_dt"], der=0)
+	# 	x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)
+	# 	des_pos = [x + action[0], y + action[1]]
+	# 	des_vel = [x_dot + action[2], y_dot + action[3]]
+
+	# 	for k in range(int(params["model_dt"] / params["dt"])):
+	# 		t = t0 + k * params["dt"]
+	# 		u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
+
+	# 		# if (k % params["loss_stride"] == 0):
+				
+	# 		obs = f(obs, u, k)
+
+	# 	old_loss = (sim_score * cost(obs, u, t, task, params))
+
+	# 	old_rollout = collector.get_next()
+
+	# loss = loss + old_loss
+
 
 	# Checkpoint
 	loss_avg = loss.item()

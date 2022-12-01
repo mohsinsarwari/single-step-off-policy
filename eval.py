@@ -23,7 +23,6 @@ def evaluate(path, model_name, save_fig):
 		params = json.load(json_file)
 
 	task = figure_eight(radius=params["task_radius"], time=params["task_time"])
-	#task = random(params["task_time"])
 
 	if params["env"] == "car":
 		f_nominal = nominals["car"]
@@ -31,7 +30,7 @@ def evaluate(path, model_name, save_fig):
 		controller = Dubins_controller(params)
 		env = Dubins_env(params)
 
-		num_input_states = 5 # Four states + time
+		num_input_states = 6 # Four states + 2 time
 
 	elif params["env"] == "a1":
 		f_nominal = nominals["a1"]
@@ -39,7 +38,7 @@ def evaluate(path, model_name, save_fig):
 		controller = A1_controller(params)
 		env = A1GymEnv(controller, params) #pass in controller for warm up on reset
 
-		num_input_states = 6 # Five states + time
+		num_input_states = 7 # Five states + 2 time
 
 	else:
 		raise NotImplementedError("Environment not implemented")
@@ -63,7 +62,7 @@ def evaluate(path, model_name, save_fig):
 
 	for j in range(num_rollout):
 		t0 = j * params["model_dt"]
-		model_act = model(model_input(obs, t0)).detach() * params["model_scale"]
+		model_act = model(model_input(obs, t0, params["task_time"])).detach() * params["model_scale"]
 
 		x, y = task.evaluate(t0 + params["model_dt"], der=0)
 		x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)

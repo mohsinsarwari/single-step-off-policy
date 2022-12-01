@@ -85,7 +85,7 @@ if __name__=="__main__":
 	env = Dubins_env(params)
 	controller = Dubins_controller(params)
 
-	task = figure_eight(radius=5, time=params["task_time"])
+	task = figure_eight(radius=3, time=params["task_time"])
 	#task = random(time=params["task_time"])
 
 	obs = env.reset()
