@@ -15,8 +15,8 @@ import shutil
 
 from dubins_controller import *
 from dubins_env import *
-from a1_controller import *
-from a1_env import *
+# from a1_controller import *
+# from a1_env import *
 
 from helper import *
 from task_generator import *
@@ -32,6 +32,7 @@ parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--input_weight', type=float, default=0) #weight on input in cost function
 parser.add_argument('--loss_stride', type=float, default=5) # number of simulation steps before adding cost to loss again
 parser.add_argument('--terminal_weight', type=float, default=1)
+parser.add_argument('--gamma', type=float, default=0.95)
 
 
 parser.add_argument('--task_radius', type=float, default=3) #figure eight radius
@@ -52,6 +53,8 @@ parser.add_argument('--width', type=float, default=64) #width of hidden layers (
 parser.add_argument('--model_scale', type=float, default=1)
 parser.add_argument('--save_every', type=float, default=50) #save model every # iterations
 parser.add_argument('--overwrite', '-o', action="store_true") #save model every # iterations
+
+parser.add_argument('--critic', action="store_true") # add critic
 
 args  = parser.parse_args()
 params = vars(args)
@@ -88,6 +91,7 @@ if params["env"] == "car":
 	controller = Dubins_controller(params)
 	env = Dubins_env(params)
 
+	num_phys_states = 4
 	num_input_states = 6 # Four states + 2 time states
 
 elif params["env"] == "a1":
@@ -96,10 +100,15 @@ elif params["env"] == "a1":
 	controller = A1_controller(params)
 	env = A1GymEnv(controller, params) #pass in controller for warm up on reset
 
+	num_phys_states = 5
 	num_input_states = 7 # Five states + 2 time states
 
 else:
 	raise NotImplementedError("Environment not implemented")
+
+################### MISC ######################
+rollout_len = int(params["model_dt"] / params["dt"])
+mse_loss = torch.nn.MSELoss()
 
 ################### DATA COLLECTOR ######################
 collector = DataCollector(task, env, controller, params)
@@ -109,16 +118,19 @@ collector = DataCollector(task, env, controller, params)
 # Output: x_y position and velocity
 # make_model in helper.py
 model = make_model([num_input_states, params["width"], params["width"], 4])
+vfun = make_model([num_phys_states, params["width"], params["width"], 1])
 
 #################### TRAINING LOOP ##################################
 optimizer = optim.Adam(model.parameters(), lr=params["lr"])
+critic_optimizer = optim.Adam(vfun.parameters(), lr=params["lr"])
 
 best_loss = np.inf
 best_iter = 0
 prog_bar = trange(params["iterations"], leave=True)
 for i in prog_bar:
 
-	optimizer.zero_grad() 
+	optimizer.zero_grad()
+	critic_optimizer.zero_grad() 
 
 	################# DATA COLLECTION (see data_collector.py) ################
 	collector.collect_data(model)
@@ -127,15 +139,22 @@ for i in prog_bar:
 	rollout = collector.get_next()
 
 	loss = 0
+	loss_finite = 0
+	critic_loss = 0
 	while rollout: 
 		x0s = rollout[0]
 		t0s = rollout[1]
 		actions = rollout[2]
 		dyns = rollout[3]
 
+		discount = 1
+		initial_obs = None
+		rollout_loss = 0
 		for j in range(len(x0s)):
 
 			x0 = x0s[j]
+			if j == 0:
+				initial_obs = x0
 			t0 = t0s[j]
 			dyn = dyns[j]
 
@@ -151,18 +170,30 @@ for i in prog_bar:
 			des_pos = [x + model_act[0], y + model_act[1]]
 			des_vel = [x_dot + model_act[2], y_dot + model_act[3]]
 
+			
+
 			for k in range(int(params["model_dt"] / params["dt"])):
 				t = t0 + k * params["dt"]
 				u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
 
 				# if (k % params["loss_stride"] == 0):
 					
-				obs = f(obs, u, k)
+				obs_prev, obs = obs, f(obs, u, k)
 
-			loss += cost(obs, u, t, task, params)
+			stage_cost = discount*cost(obs_prev, u, t, task, params)
+			rollout_loss += stage_cost
+			loss += stage_cost
+
+			discount *= params["gamma"]
+		
+		critic_loss += torch.square(vfun(initial_obs) - (loss.detach() + discount * vfun(obs)))
+		# print(loss, loss.shape, vfun(obs), vfun(obs).shape)
+		loss_finite += rollout_loss
+		if params["critic"]:
+			loss += discount * vfun(obs).reshape(loss.shape)
+		
 
 		rollout = collector.get_next()
-
 
 	# old_rollout = collector.get_old_next()
 	# while old_rollout:
@@ -203,8 +234,12 @@ for i in prog_bar:
 
 	# Checkpoint
 	loss_avg = loss.item()
+	critic_loss_avg = critic_loss.item()
+	loss_finite_avg = loss_finite.item()
 	if log: 
 		writer.add_scalar("Loss/Train", loss_avg, i)
+		writer.add_scalar("Loss/VFun", critic_loss_avg, i)
+		writer.add_scalar("Loss/Finite", loss_finite_avg, i)
 
 		if (i % params["save_every"] == 0) and (i != 0):
 			print("Saved Model with Loss {}".format(loss_avg))
@@ -218,10 +253,13 @@ for i in prog_bar:
 
 	# Backprop
 	loss.retain_grad()
+	critic_loss.retain_grad()
 	loss.backward(retain_graph=True)
+	critic_loss.backward(retain_graph=True)
 	optimizer.step()
+	critic_optimizer.step()
 
-	prog_bar.set_description("Loss: {}".format(loss_avg), refresh=True)
+	prog_bar.set_description(f"Loss/Finite/Critic: {loss_avg}/{loss_finite_avg}/{critic_loss_avg}", refresh=True)
 
 
 ########################### FINAL LOGGING STUFF ###########################
