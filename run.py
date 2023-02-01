@@ -37,6 +37,7 @@ parser.add_argument('--gamma', type=float, default=0.95)
 
 parser.add_argument('--task_radius', type=float, default=3) #figure eight radius
 parser.add_argument('--task_time', type=float, default=10) #time (in seconds) to complete figure eight
+parser.add_argument('--eval_time', type=list, default=[10,20,30,40,50]) #time (in seconds) to complete figure eight for evaluation
 parser.add_argument('--model_dt', type=float, default=0.5) #time length between model calls
 parser.add_argument('--dt', type=float, default=0.01)
 parser.add_argument('--num_model_calls_per_rollout', type=float, default=5)
@@ -147,17 +148,16 @@ for i in prog_bar:
 		actions = rollout[2]
 		dyns = rollout[3]
 
-		discount = 1
 		initial_obs = None
 		rollout_loss = 0
+		discount = 1
 		for j in range(len(x0s)):
-
 			x0 = x0s[j]
 			if j == 0:
 				initial_obs = x0
 			t0 = t0s[j]
 			dyn = dyns[j]
-
+			
 			def f(x,u,k):
 				return f_nominal(x,u,params["dt"]) - f_nominal(dyn[k][0],dyn[k][1],params["dt"]) + dyn[k][2]
 		
@@ -169,20 +169,18 @@ for i in prog_bar:
 			x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)
 			des_pos = [x + model_act[0], y + model_act[1]]
 			des_vel = [x_dot + model_act[2], y_dot + model_act[3]]
-
 			
-
+			
 			for k in range(int(params["model_dt"] / params["dt"])):
 				t = t0 + k * params["dt"]
 				u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
 
 				# if (k % params["loss_stride"] == 0):
-					
-				obs_prev, obs = obs, f(obs, u, k)
+				stage_cost = discount*cost(obs, u, t, task, params)
+				rollout_loss += stage_cost
+				loss += stage_cost
 
-			stage_cost = discount*cost(obs_prev, u, t, task, params)
-			rollout_loss += stage_cost
-			loss += stage_cost
+				obs = f(obs, u, k)
 
 			discount *= params["gamma"]
 		
@@ -194,43 +192,6 @@ for i in prog_bar:
 		
 
 		rollout = collector.get_next()
-
-	# old_rollout = collector.get_old_next()
-	# while old_rollout:
-
-	# 	x0 = old_rollout[0]
-	# 	t0 = old_rollout[1]
-	# 	action = old_rollout[2]
-	# 	dyn = old_rollout[3]
-
-	# 	def f(x,u,k):
-	# 		return f_nominal(x,u,params["dt"]) - f_nominal(dyn[k][0],dyn[k][1],params["dt"]) + dyn[k][2]
-	
-	# 	obs = x0
-
-	# 	model_act = model(model_input(obs, t0, params["task_time"])) * params["model_scale"]
-
-	# 	sim_score = torch.exp(-params["sim_score_scale"] * torch.norm(model_act - action))
-
-	# 	x, y = task.evaluate(t0 + params["model_dt"], der=0)
-	# 	x_dot, y_dot = task.evaluate(t0 + params["model_dt"], der=1)
-	# 	des_pos = [x + action[0], y + action[1]]
-	# 	des_vel = [x_dot + action[2], y_dot + action[3]]
-
-	# 	for k in range(int(params["model_dt"] / params["dt"])):
-	# 		t = t0 + k * params["dt"]
-	# 		u, des_pos, act_pos = controller.next_action(des_pos, des_vel, obs)
-
-	# 		# if (k % params["loss_stride"] == 0):
-				
-	# 		obs = f(obs, u, k)
-
-	# 	old_loss = (sim_score * cost(obs, u, t, task, params))
-
-	# 	old_rollout = collector.get_next()
-
-	# loss = loss + old_loss
-
 
 	# Checkpoint
 	loss_avg = loss.item()

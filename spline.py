@@ -156,7 +156,7 @@ class Spline():
         self.coeffs_y = torch.matmul(self.A_y, self.b_y)
         
     def evaluate(self, t, der=0):
-
+        t = t % self.times[-1]
         #Find which cubic funtion to use
         if t == 0:
             i = 0

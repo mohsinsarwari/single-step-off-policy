@@ -12,9 +12,11 @@ import argparse
 import pdb
 import os
 import json
-from a1_controller import *
-from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
+# from a1_controller import *
+# from a1_learning_hierarchical.motion_imitation.envs.a1_env import A1GymEnv
 matplotlib.rcParams.update({'font.size': 8})
+
+# python3 eval.py --run_name "dubins-critic" --save
 
 def evaluate(path, model_name, save_fig):
 
@@ -97,8 +99,8 @@ def evaluate(path, model_name, save_fig):
 	# print("Naive Loss: ", dum_loss_avg)
 
 	if save_fig:
-		model_based.savefig(os.path.join(path, "plot.png"),  bbox_inches='tight')
-		naive.savefig(os.path.join(path, "plot.png"),  bbox_inches='tight')
+		plt.savefig(os.path.join(path, "plot.png"),  bbox_inches='tight')
+		plt.savefig(os.path.join(path, "plot.png"),  bbox_inches='tight')
 	else:
 		plt.show()
 
